@@ -1,0 +1,9 @@
+-r base.txt
+
+# Production-only extras
+django-prometheus==2.3.1
+
+# Postgres driver built against the platform's libpq. The `[binary]` wheel in
+# base.txt covers most hosts; this pin keeps the resolver from swapping it for
+# a source build on Render.
+psycopg-binary==3.2.3

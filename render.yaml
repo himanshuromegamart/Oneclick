@@ -1,0 +1,123 @@
+# ---------------------------------------------------------------------------
+# Render blueprint.
+#
+# Deploy: Render dashboard -> New -> Blueprint -> pick this repository.
+#
+# Secrets are declared with `sync: false`, which means Render prompts for them
+# on first deploy and stores them encrypted. They are deliberately NOT written
+# here - this file is committed to git, and a database password in a repository
+# is a password that has leaked.
+#
+# The database is Neon (external managed Postgres), passed in as DATABASE_URL.
+# ---------------------------------------------------------------------------
+
+services:
+  - type: web
+    name: sarah-aqua-api
+    runtime: python
+    plan: free
+    region: singapore          # closest Render region to India
+    branch: main
+
+    buildCommand: "./render-build.sh"
+
+    # $PORT is supplied by Render.
+    # 2 workers x 4 threads suits the 512 MB free instance: the work is almost
+    # entirely waiting on Postgres and Cloudinary, so threads are cheaper than
+    # processes here.
+    startCommand: >
+      gunicorn config.wsgi:application
+      --bind 0.0.0.0:$PORT
+      --workers 2
+      --threads 4
+      --worker-class gthread
+      --timeout 120
+      --graceful-timeout 30
+      --max-requests 1000
+      --max-requests-jitter 100
+      --access-logfile -
+      --error-logfile -
+
+    # /live/ answers without touching Postgres, Redis or Cloudinary. A probe
+    # that checked dependencies would restart a healthy container every time
+    # the database blipped - use /ready/ for monitoring instead.
+    healthCheckPath: /live/
+
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.13.1"
+
+      - key: DJANGO_SETTINGS_MODULE
+        value: config.settings.production
+
+      # Render generates these once and keeps them. Rotating either logs
+      # everyone out, which is the intended behaviour if one leaks.
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - key: JWT_SIGNING_KEY
+        generateValue: true
+
+      # --- Secrets: enter these in the Render dashboard ------------------
+      # Neon connection string, e.g.
+      #   postgresql://USER:PASSWORD@HOST.neon.tech/neondb?sslmode=require
+      - key: DATABASE_URL
+        sync: false
+
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+
+      - key: SMS_USER_ID
+        sync: false
+      - key: SMS_PASSWORD
+        sync: false
+      - key: SMS_SENDER_ID
+        sync: false
+      - key: SMS_ENTITY_ID
+        sync: false
+      - key: SMS_TEMPLATE_ID
+        sync: false
+
+      # --- Non-secret configuration --------------------------------------
+      # Real SMS. Switch to ConsoleSMSBackend to test without spending credits.
+      - key: SMS_BACKEND
+        value: apps.accounts.sms.NimbusITSMSBackend
+      - key: SMS_BASE_URL
+        value: https://nimbusit.biz/api/SmsApi/SendSingleApi
+
+      - key: CLOUDINARY_UPLOAD_FOLDER
+        value: sarah-aqua-soft
+      - key: CLOUDINARY_SIGNED_URL_TTL
+        value: "900"
+
+      # A native mobile app sends no Origin header, so CORS does not apply to
+      # it. Left open because the API is token-authenticated and cookie-free;
+      # set CORS_ALLOWED_ORIGINS instead if a web client is added.
+      - key: CORS_ALLOW_ALL_ORIGINS
+        value: "true"
+
+      - key: LOG_LEVEL
+        value: INFO
+      - key: LOG_FORMATTER
+        value: json
+      - key: SECURE_SSL_REDIRECT
+        value: "true"
+
+      - key: OTP_TTL_SECONDS
+        value: "300"
+      - key: OTP_MAX_SENDS_PER_DAY
+        value: "10"
+      - key: MAX_UPLOAD_BYTES
+        value: "209715200"
+      - key: RECYCLE_BIN_RETENTION_DAYS
+        value: "30"
+      - key: SHARE_LINK_TTL_HOURS
+        value: "168"
+
+      # Optional. Leave unset and the app falls back to an in-process cache -
+      # fine for a single instance. Add a Redis URL before scaling to several.
+      # - key: REDIS_URL
+      #   sync: false

@@ -1,0 +1,32 @@
+# Normalise line endings.
+#
+# This repository is edited on Windows and runs on Linux. Without this, git
+# would commit CRLF and the deploy would fail with a genuinely baffling error:
+# a shell script whose first line ends in \r reports
+#   /usr/bin/env: 'bash\r': No such file or directory
+# and there is nothing visibly wrong with the file.
+
+* text=auto eol=lf
+
+# Files that MUST be LF - they are executed by a Linux shell or interpreter.
+*.sh            text eol=lf
+*.py            text eol=lf
+*.yml           text eol=lf
+*.yaml          text eol=lf
+*.toml          text eol=lf
+*.cfg           text eol=lf
+*.conf          text eol=lf
+*.md            text eol=lf
+Dockerfile      text eol=lf
+.env.example    text eol=lf
+.python-version text eol=lf
+proxy_params_custom text eol=lf
+
+# Binary - never touch these.
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.pdf  binary
+*.zip  binary

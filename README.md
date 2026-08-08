@@ -1,0 +1,363 @@
+# Sarah Aqua Soft — Document Manager (Backend)
+
+A backend API for a mobile app that keeps company documents organised in
+categories, like folders on a computer. Staff log in with a mobile number and
+an OTP, add categories, upload documents, and share them with customers by
+link.
+
+Backend only. No website, no admin screen — the phone app is the interface.
+
+---
+
+## What it does
+
+**Categories, subcategories and folders are all the same thing** — a box that
+holds other boxes and files, exactly like folders on a computer. What you call
+it just depends on where it sits. Staff create them from the app; nothing is
+fixed in code.
+
+```
+Quotation
+    Water ATM
+        500 LPH
+        1000 LPH
+    Water Cooler
+        40L
+Documents
+    Aadhaar
+    GST
+Certificates
+    ISO
+```
+
+Opening one is a single request — `GET /api/v1/browse/?parent_id=<id>` returns
+the subfolders and the documents inside it together, in one list, with the
+breadcrumb. That is what the app's main screen uses.
+
+**Files.** PDF, Word, Excel, images, video, and so on. Upload into any folder,
+then rename, move, copy, download, and keep previous versions. Deleted items go
+to a recycle bin and can be restored.
+
+**Login.** Mobile number + OTP by SMS. There is no signup screen — you create
+the accounts (see below).
+
+**Search.** Finds a document by name, tag or description, and forgives typos —
+searching `brochre` still finds `Brochure`.
+
+**Sharing.** Produces a link a customer can open without an account. It
+expires, can limit how many times it's downloaded, and can be switched off at
+any time.
+
+---
+
+## Who can do what
+
+Three roles. That's the whole permission system.
+
+| | Owner | Staff | Viewer |
+|---|:---:|:---:|:---:|
+| Browse categories, view and download | ✅ | ✅ | ✅ |
+| Search | ✅ | ✅ | ✅ |
+| Add / rename a category | ✅ | ✅ | — |
+| Upload a file | ✅ | ✅ | — |
+| Rename or delete **their own** files | ✅ | ✅ | — |
+| Delete **anyone's** files or categories | ✅ | — | — |
+| Share a file | ✅ | ✅ | — |
+| Restore from the recycle bin | ✅ | own items | — |
+| Delete permanently | ✅ | — | — |
+
+"Their own" means the person who uploaded it. Staff manage what they added; the
+Owner manages everything.
+
+---
+
+## Setting it up
+
+### 1. What you need
+
+- Python 3.13
+- PostgreSQL 14 or newer
+- Redis (for caching and background jobs)
+
+### 2. Install
+
+```bash
+python -m venv .venv
+.venv\Scripts\activate          # Windows
+# source .venv/bin/activate     # Mac / Linux
+
+pip install -r requirements/development.txt
+```
+
+### 3. Configure
+
+```bash
+cp .env.example .env
+```
+
+Open `.env` and fill in:
+
+| Setting | Where it comes from |
+|---|---|
+| `POSTGRES_*` | Your database name, user and password |
+| `DJANGO_SECRET_KEY`, `JWT_SIGNING_KEY` | Generate: `python -c "import secrets; print(secrets.token_urlsafe(64))"` |
+| `CLOUDINARY_*` | Cloudinary dashboard → Account Details |
+| `SMS_*` | Your NimbusIT account |
+
+While developing, leave `SMS_BACKEND=apps.accounts.sms.ConsoleSMSBackend` — the
+OTP is printed in the terminal and no SMS credits are spent. Switch to
+`NimbusITSMSBackend` to send real messages.
+
+### 4. Create the database and the first user
+
+```bash
+python manage.py migrate
+
+python manage.py create_user --phone 9876543210 --name "Your Name" --role owner
+```
+
+### 5. Run it
+
+```bash
+python manage.py runserver
+```
+
+Open <http://localhost:8000/api/docs/> for the interactive API documentation.
+
+---
+
+## Managing users
+
+There is no user-management screen, by design — accounts are created from the
+server:
+
+```bash
+# Add someone who can upload and manage their own files
+python manage.py create_user --phone 9812345678 --name "Ramesh" --role staff
+
+# Add someone who can only look and download
+python manage.py create_user --phone 9811111111 --name "Suresh" --role viewer
+
+# Change an existing person's role
+python manage.py create_user --phone 9812345678 --role viewer --update
+
+# Switch an account off (they keep their files; they just cannot log in)
+python manage.py create_user --phone 9812345678 --disable
+
+# Switch it back on
+python manage.py create_user --phone 9812345678 --enable
+```
+
+---
+
+## Deploying to Render
+
+The repository contains a Render blueprint ([render.yaml](render.yaml)), so the
+service is defined in code rather than clicked together in a dashboard.
+
+### 1. Create the service
+
+Render → **New** → **Blueprint** → pick this repository. Render reads
+`render.yaml` and creates a web service that builds with
+[render-build.sh](render-build.sh) (install → collectstatic → migrate) and runs
+under Gunicorn.
+
+### 2. Fill in the secrets
+
+Render prompts for the values marked `sync: false`. They are never stored in
+git.
+
+| Variable | Value |
+|---|---|
+| `DATABASE_URL` | Your Neon connection string (see below) |
+| `CLOUDINARY_CLOUD_NAME` / `_API_KEY` / `_API_SECRET` | Cloudinary dashboard |
+| `SMS_USER_ID` / `SMS_PASSWORD` / `SMS_SENDER_ID` | NimbusIT account |
+| `SMS_ENTITY_ID` / `SMS_TEMPLATE_ID` | Your DLT registration |
+
+`DJANGO_SECRET_KEY` and `JWT_SIGNING_KEY` are generated by Render
+automatically — you never see or set them. Rotating either signs everyone out,
+which is exactly what you want if one ever leaks.
+
+### 3. The database (Neon)
+
+Paste the Neon **pooled** connection string into `DATABASE_URL`:
+
+```
+postgresql://USER:PASSWORD@ep-xxxx-pooler.REGION.aws.neon.tech/neondb?sslmode=require
+```
+
+Use the *pooler* host. Render's free instance opens and closes connections
+often, and Neon's direct endpoint has a much lower connection ceiling than the
+pooled one.
+
+`sslmode=require` is enforced in code regardless — Neon rejects unencrypted
+connections, and so does this app.
+
+The build step creates the tables and the two Postgres extensions the search
+needs (`pg_trgm`, `unaccent`). Nothing to run by hand.
+
+### 4. Create the first user
+
+Once the deploy is green, open the Render **Shell** tab:
+
+```bash
+python manage.py create_user --phone 9876543210 --name "Your Name" --role owner
+```
+
+That account can then log in from the app.
+
+### 5. Check it
+
+| URL | Should show |
+|---|---|
+| `https://<service>.onrender.com/live/` | `{"status": "alive"}` |
+| `https://<service>.onrender.com/ready/` | `{"status": "ready", …}` |
+| `https://<service>.onrender.com/health/` | Component-by-component detail |
+| `https://<service>.onrender.com/api/docs/` | Interactive API documentation |
+
+Render's own health check uses `/live/`, which deliberately touches no
+dependency: a database hiccup should page you, not make the platform restart a
+container that is working fine. Point uptime monitoring at `/ready/` instead —
+that one does check Postgres.
+
+### Things to know about the free plan
+
+- **The service sleeps after 15 minutes idle.** The next request takes 30–60
+  seconds to wake it. Fine for internal use; if the owner finds it annoying,
+  the paid instance removes it.
+- **No Redis.** The app detects that and falls back to an in-process cache, so
+  everything still works — the folder tree is just recomputed instead of
+  cached. Add a Redis URL before running more than one instance, because
+  otherwise each instance counts rate limits separately.
+- **No background worker.** Nothing in the request path needs one. The only
+  cost is that the recycle bin never empties itself; deleted files keep
+  occupying Cloudinary storage. Run the purge by hand from the Shell tab
+  occasionally, or add a worker later:
+  ```bash
+  python manage.py shell -c "from apps.files.tasks import purge_recycle_bin; purge_recycle_bin()"
+  ```
+- **Disk is ephemeral.** That is fine here — files live in Cloudinary and data
+  lives in Neon. Nothing is written to local disk.
+
+### Mobile access
+
+A native Android/iOS app sends no `Origin` header, so CORS never applies to it —
+the API is reachable from a phone out of the box. `CORS_ALLOW_ALL_ORIGINS` is
+on for browser callers, which is safe here because the API uses no cookies and
+no sessions: every request is authorised by an explicit `Authorization: Bearer`
+token, which a browser will not attach on its own. Set `CORS_ALLOWED_ORIGINS`
+to a specific list if a web front end is ever added.
+
+---
+
+## Running with Docker
+
+```bash
+docker compose up --build
+```
+
+Starts Postgres, Redis, the API, a background worker and NGINX together. The
+API lands on <http://localhost:8000>. Migrations run automatically on start.
+
+---
+
+## Background jobs
+
+A worker handles housekeeping on a schedule. It is optional day to day — the
+app works without it — but without it the recycle bin never empties and storage
+keeps growing.
+
+```bash
+celery -A config worker --loglevel=info
+celery -A config beat   --loglevel=info
+```
+
+| Job | What it does |
+|---|---|
+| `purge_recycle_bin` | Permanently removes items deleted more than 30 days ago |
+| `purge_deleted_folders` | Same, for categories |
+| `expire_share_links` | Marks lapsed share links as expired |
+| `trim_recent_files` | Keeps each person's "recent" list to a sensible length |
+| `refresh_folder_counters` | Re-checks the file counts shown on each category |
+
+---
+
+## Tests
+
+```bash
+pytest              # needs a running Postgres
+pytest --cov        # with a coverage report
+```
+
+207 tests cover the OTP flow and its rate limits, the permission rules, the
+category tree (including the cases that would corrupt it), file handling,
+browsing and search.
+
+---
+
+## How the code is arranged
+
+```
+apps/
+  core/       Shared foundations: base models, error format, paging, logging
+  accounts/   Users, OTP login, JWT          -> /api/v1/auth/...
+  folders/    The category tree              -> /api/v1/categories/
+  files/      Documents, sharing, search     -> /api/v1/documents/
+config/       Settings, URLs, Celery
+docs/         API reference for whoever builds the phone app
+```
+
+The Python packages are named `folders` and `files`; the public routes are
+`/categories/` and `/documents/`, because that is the language the business
+uses. Renaming the packages too would have churned every import for no gain.
+
+Inside each app the layering is consistent:
+
+- **models** — database tables
+- **repositories** — all the database queries live here, and nowhere else
+- **services** — the business rules
+- **views** — read the request, call a service, return the answer
+
+The point of the split is that a rule is written once and can be tested without
+starting a web server.
+
+---
+
+## Things worth knowing
+
+**Files are not stored on the server.** They go to Cloudinary; the database
+keeps only the details (name, size, who uploaded it, which category). Downloads
+use a link that expires after 15 minutes, so a link copied out of the app stops
+working — sharing stays deliberate.
+
+**Deleting is reversible.** Everything goes to a recycle bin first. Only the
+Owner can destroy something permanently.
+
+**Switching an account off is immediate.** The person is locked out on their
+next action, even if they were already logged in.
+
+**OTP protections.** Codes are stored scrambled, expire in 5 minutes, allow 5
+wrong attempts, then lock that number for 30 minutes. There is a 60-second wait
+between resends and a cap of 10 per number per day, so nobody can be spammed
+and the SMS bill cannot run away.
+
+**One security note to settle with NimbusIT.** Their documented address starts
+with `http://`, not `https://`, which means the OTP travels unencrypted. The
+system tries `https://` first; if NimbusIT don't support it, change
+`SMS_BASE_URL` in `.env` to the `http://` address. Worth asking them for an
+HTTPS endpoint.
+
+---
+
+## Before going live
+
+- [ ] Set `DJANGO_SETTINGS_MODULE=config.settings.production`
+- [ ] Generate fresh `DJANGO_SECRET_KEY` and `JWT_SIGNING_KEY` (not the dev ones)
+- [ ] Set `DJANGO_ALLOWED_HOSTS` to your real domain
+- [ ] Put a TLS certificate on NGINX and keep `SECURE_SSL_REDIRECT=true`
+- [ ] Set `POSTGRES_SSLMODE=require`
+- [ ] Switch `SMS_BACKEND` to `NimbusITSMSBackend`
+- [ ] Confirm the SMS text matches your approved DLT template word for word
+- [ ] Turn on automatic database backups
+- [ ] Run the Celery worker and beat scheduler
+- [ ] Confirm `.env` is not in version control
