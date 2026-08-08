@@ -162,10 +162,25 @@ Render → **New** → **Blueprint** → pick this repository. Render reads
 [render-build.sh](render-build.sh) (install → collectstatic → migrate) and runs
 under Gunicorn.
 
+> **`render.yaml` only applies to Blueprint services.** If you create the web
+> service by hand instead (New → Web Service), Render ignores the file
+> completely — including the `generateValue: true` entries. You then have to
+> set **every** variable yourself, `DJANGO_SECRET_KEY` and `JWT_SIGNING_KEY`
+> included, or the app refuses to boot with
+> `ImproperlyConfigured: Required environment variable 'DJANGO_SECRET_KEY' is not set.`
+>
+> Generate them with:
+> ```bash
+> python -c "import secrets; print(secrets.token_urlsafe(64))"
+> ```
+
 ### 2. Fill in the secrets
 
 Render prompts for the values marked `sync: false`. They are never stored in
 git.
+
+For a Blueprint service, `DJANGO_SECRET_KEY` and `JWT_SIGNING_KEY` are
+generated automatically. For a hand-made service, add them yourself.
 
 | Variable | Value |
 |---|---|
