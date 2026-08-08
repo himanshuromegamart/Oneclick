@@ -14,41 +14,34 @@
 services:
   - type: web
     name: sarah-aqua-api
-    runtime: python
+    # Docker, because a Dockerfile is present and Render prefers it. Declaring
+    # it explicitly means the blueprint and a hand-created service behave
+    # identically instead of silently diverging.
+    #
+    # The image itself handles the rest: collectstatic at build time, then
+    # migrations and Gunicorn from docker/entrypoint.sh at start.
+    runtime: docker
+    dockerfilePath: ./Dockerfile
     plan: free
     region: singapore          # closest Render region to India
     branch: main
 
-    buildCommand: "./render-build.sh"
-
-    # $PORT is supplied by Render.
-    # 2 workers x 4 threads suits the 512 MB free instance: the work is almost
-    # entirely waiting on Postgres and Cloudinary, so threads are cheaper than
-    # processes here.
-    startCommand: >
-      gunicorn config.wsgi:application
-      --bind 0.0.0.0:$PORT
-      --workers 2
-      --threads 4
-      --worker-class gthread
-      --timeout 120
-      --graceful-timeout 30
-      --max-requests 1000
-      --max-requests-jitter 100
-      --access-logfile -
-      --error-logfile -
-
     # /live/ answers without touching Postgres, Redis or Cloudinary. A probe
     # that checked dependencies would restart a healthy container every time
-    # the database blipped - use /ready/ for monitoring instead.
+    # the database blipped - point uptime monitoring at /ready/ instead.
     healthCheckPath: /live/
 
     envVars:
-      - key: PYTHON_VERSION
-        value: "3.13.1"
-
       - key: DJANGO_SETTINGS_MODULE
         value: config.settings.production
+
+      # One worker with several threads fits the 512 MB free instance. The work
+      # is almost entirely waiting on Postgres and Cloudinary, so threads cost
+      # far less memory than processes and serve the same concurrency.
+      - key: WEB_CONCURRENCY
+        value: "1"
+      - key: GUNICORN_THREADS
+        value: "4"
 
       # Render generates these once and keeps them. Rotating either logs
       # everyone out, which is the intended behaviour if one leaks.

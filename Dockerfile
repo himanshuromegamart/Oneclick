@@ -65,21 +65,31 @@ RUN DJANGO_SECRET_KEY=build-only \
     SMS_USER_ID=build SMS_PASSWORD=build SMS_SENDER_ID=build \
     python manage.py collectstatic --noinput --clear
 
+ENV PORT=8000
 EXPOSE 8000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-    CMD curl -fsS http://localhost:8000/live/ || exit 1
+    CMD curl -fsS "http://localhost:${PORT}/live/" || exit 1
 
 ENTRYPOINT ["/app/docker/entrypoint.sh"]
-CMD ["gunicorn", "config.wsgi:application", \
-     "--bind", "0.0.0.0:8000", \
-     "--workers", "4", \
-     "--threads", "2", \
-     "--worker-class", "gthread", \
-     "--timeout", "120", \
-     "--graceful-timeout", "30", \
-     "--keep-alive", "5", \
-     "--max-requests", "1000", \
-     "--max-requests-jitter", "100", \
-     "--access-logfile", "-", \
-     "--error-logfile", "-"]
+
+# Shell form, deliberately: a JSON-array CMD is executed directly with no shell,
+# so "$PORT" would be passed to gunicorn as the literal four characters and the
+# bind would fail. Hosts like Render assign the port at runtime and expect the
+# process to listen on exactly that one - a container that hardcodes 8000 is
+# never detected as ready, which looks like a mysterious "no open ports" error.
+#
+# WEB_CONCURRENCY is the conventional name for worker count and is set by most
+# platforms from the CPU allocation; 4 is the fallback for a plain docker run.
+CMD exec gunicorn config.wsgi:application \
+    --bind "0.0.0.0:${PORT}" \
+    --workers "${WEB_CONCURRENCY:-4}" \
+    --threads "${GUNICORN_THREADS:-4}" \
+    --worker-class gthread \
+    --timeout 120 \
+    --graceful-timeout 30 \
+    --keep-alive 5 \
+    --max-requests 1000 \
+    --max-requests-jitter 100 \
+    --access-logfile - \
+    --error-logfile -
