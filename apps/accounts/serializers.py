@@ -9,7 +9,7 @@ from typing import Any
 
 from rest_framework import serializers
 
-from apps.accounts.constants import Platform
+from apps.accounts.constants import Platform, UserRole
 from apps.accounts.models import Device, User
 from apps.core.validators import normalize_phone_number
 
@@ -111,6 +111,26 @@ class ProfileUpdateSerializer(serializers.Serializer):
         if not attrs:
             raise serializers.ValidationError("Provide at least one field to update.")
         return attrs
+
+
+class SetupCreateUserSerializer(serializers.Serializer):
+    """Body for the guarded account-bootstrap endpoint."""
+
+    setup_key = serializers.CharField(
+        write_only=True,
+        style={"input_type": "password"},
+        help_text="The SETUP_KEY configured on the server. Never stored or logged.",
+    )
+    phone_number = PhoneNumberField(
+        max_length=20, help_text="Indian mobile number. Any common format is accepted."
+    )
+    full_name = serializers.CharField(max_length=150)
+    email = serializers.EmailField(required=False, allow_blank=True, default="")
+    role = serializers.ChoiceField(
+        choices=UserRole.choices,
+        default=UserRole.OWNER,
+        help_text="owner = full control, staff = upload and manage own files, viewer = read-only.",
+    )
 
 
 class DeviceSerializer(serializers.ModelSerializer):

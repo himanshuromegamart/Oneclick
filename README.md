@@ -213,13 +213,42 @@ needs (`pg_trgm`, `unaccent`). Nothing to run by hand.
 
 ### 4. Create the first user
 
-Once the deploy is green, open the Render **Shell** tab:
+**If you have shell access** (Render Shell tab, on a paid instance):
 
 ```bash
 python manage.py create_user --phone 9876543210 --name "Your Name" --role owner
 ```
 
-That account can then log in from the app.
+**If you don't** (the free plan puts Shell behind an upgrade), use the setup
+endpoint instead:
+
+1. Add `SETUP_KEY` to the environment — a long random string, not a word:
+   ```bash
+   python -c "import secrets; print(secrets.token_urlsafe(32))"
+   ```
+2. Open `https://<service>.onrender.com/api/docs/` and find
+   **POST /api/v1/setup/create-user/**
+3. Click **Try it out** and send:
+   ```json
+   {
+     "setup_key": "<the SETUP_KEY you set>",
+     "phone_number": "9876543210",
+     "full_name": "Your Name",
+     "role": "owner"
+   }
+   ```
+4. **Delete `SETUP_KEY` from the environment.** The endpoint switches itself
+   off and returns 404 again.
+
+That last step matters. While `SETUP_KEY` is set, anyone who learns it can
+create themselves an owner account — the endpoint deliberately bypasses the
+"accounts are created by an administrator" rule, which is the whole reason it
+is disabled unless you explicitly turn it on.
+
+Its guards, if you want to leave it on longer: the key is compared in constant
+time, attempts are limited to 10 an hour per IP, a key shorter than 8
+characters is rejected outright, and every attempt — success or failure — is
+logged.
 
 ### 5. Check it
 

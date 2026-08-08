@@ -9,6 +9,7 @@ from apps.accounts.views import (
     RefreshTokenView,
     RequestOTPView,
     ResendOTPView,
+    SetupCreateUserView,
     VerifyOTPView,
 )
 
@@ -24,4 +25,9 @@ auth_patterns = [
     path("devices/", MyDevicesView.as_view(), name="my-devices"),
 ]
 
-urlpatterns = [path("auth/", include((auth_patterns, "auth")))]
+urlpatterns = [
+    path("auth/", include((auth_patterns, "auth"))),
+    # Kept off /auth/ deliberately: this is a setup tool, not part of the login
+    # flow, and it should be easy to spot and remove when it is no longer needed.
+    path("setup/create-user/", SetupCreateUserView.as_view(), name="setup-create-user"),
+]

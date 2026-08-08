@@ -87,3 +87,18 @@ class SearchThrottle(_IdentityMixin, SimpleRateThrottle):
 
     def get_cache_key(self, request: Any, view: Any) -> str | None:
         return self.cache_format % {"scope": self.scope, "ident": self._identity(request)}
+
+
+class SetupThrottle(SimpleRateThrottle):
+    """Throttle for the account-bootstrap endpoint, keyed by IP.
+
+    Keyed by IP rather than by user, because the caller is by definition not
+    authenticated yet. This is the only thing standing between a guessable
+    SETUP_KEY and an attacker creating themselves an owner account, so the rate
+    is deliberately low.
+    """
+
+    scope = "setup"
+
+    def get_cache_key(self, request: Any, view: Any) -> str | None:
+        return self.cache_format % {"scope": self.scope, "ident": self.get_ident(request)}

@@ -208,6 +208,11 @@ REST_FRAMEWORK = {
         "upload": "120/hour",
         "download": "300/hour",
         "search": "60/min",
+        # Deliberately tight. This endpoint creates accounts, so a slow drip is
+        # the difference between a guessable key being a risk and being a
+        # certainty: 10 tries an hour makes even a weak key impractical to
+        # brute-force remotely.
+        "setup": "10/hour",
     },
     "DEFAULT_VERSIONING_CLASS": "rest_framework.versioning.URLPathVersioning",
     "DEFAULT_VERSION": "v1",
@@ -273,6 +278,23 @@ OTP_SETTINGS = {
 # form; if NimbusIT rejects it, override the variable with the http URL. Doing
 # it that way keeps the insecure choice explicit and reversible rather than
 # baked into the code.
+# ---------------------------------------------------------------------------
+# Setup endpoint
+#
+# Creating the first account needs shell access, which some hosts put behind a
+# paid plan. SETUP_KEY enables a guarded endpoint that can create users over
+# HTTP instead.
+#
+# The key is read from the environment and never hard-coded: this repository is
+# public, and a key committed to it would be a permanent, world-readable way
+# into every account.
+#
+# Leaving SETUP_KEY empty disables the endpoint entirely - which is what it
+# should be once the accounts you need exist.
+# ---------------------------------------------------------------------------
+SETUP_KEY = env_str("SETUP_KEY", "")
+SETUP_KEY_MIN_LENGTH = env_int("SETUP_KEY_MIN_LENGTH", 8)
+
 SMS_SETTINGS = {
     "BACKEND": env_str("SMS_BACKEND", "apps.accounts.sms.NimbusITSMSBackend"),
     "BASE_URL": env_str("SMS_BASE_URL", "https://nimbusit.biz/api/SmsApi/SendSingleApi"),
