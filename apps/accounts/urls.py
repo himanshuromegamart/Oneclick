@@ -3,9 +3,11 @@ from __future__ import annotations
 from django.urls import include, path
 
 from apps.accounts.views import (
+    ChangePasswordView,
     LogoutView,
     MeView,
     MyDevicesView,
+    PasswordLoginView,
     RefreshTokenView,
     RequestOTPView,
     ResendOTPView,
@@ -16,6 +18,10 @@ from apps.accounts.views import (
 app_name = "accounts"
 
 auth_patterns = [
+    # Password sign-in.
+    path("login/", PasswordLoginView.as_view(), name="login"),
+    path("change-password/", ChangePasswordView.as_view(), name="change-password"),
+    # OTP sign-in. Kept alongside password login - either issues the same tokens.
     path("otp/request/", RequestOTPView.as_view(), name="otp-request"),
     path("otp/resend/", ResendOTPView.as_view(), name="otp-resend"),
     path("otp/verify/", VerifyOTPView.as_view(), name="otp-verify"),

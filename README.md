@@ -38,8 +38,13 @@ breadcrumb. That is what the app's main screen uses.
 then rename, move, copy, download, and keep previous versions. Deleted items go
 to a recycle bin and can be restored.
 
-**Login.** Mobile number + OTP by SMS. There is no signup screen — you create
-the accounts (see below).
+**Login.** Two ways, both giving the same access:
+
+- **Password** — mobile number + password
+- **OTP** — a code sent by SMS
+
+An account can have either or both. There is no signup screen — you create the
+accounts (see below).
 
 **Search.** Finds a document by name, tag or description, and forgives typos —
 searching `brochre` still finds `Brochure`.
@@ -234,9 +239,13 @@ endpoint instead:
      "setup_key": "<the SETUP_KEY you set>",
      "phone_number": "9876543210",
      "full_name": "Your Name",
-     "role": "owner"
+     "role": "owner",
+     "password": "a-password-you-will-remember"
    }
    ```
+   Including `password` lets you sign in at `POST /api/v1/auth/login/`
+   immediately — which matters if SMS delivery is not working yet. Leave it out
+   and the account can only sign in with an OTP.
 4. **Delete `SETUP_KEY` from the environment.** The endpoint switches itself
    off and returns 404 again.
 

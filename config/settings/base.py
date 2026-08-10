@@ -213,6 +213,9 @@ REST_FRAMEWORK = {
         # certainty: 10 tries an hour makes even a weak key impractical to
         # brute-force remotely.
         "setup": "10/hour",
+        # Keyed by phone number, so a distributed attack on one account is
+        # still bounded and a shared office IP does not lock everyone out.
+        "login": "20/hour",
     },
     "DEFAULT_VERSIONING_CLASS": "rest_framework.versioning.URLPathVersioning",
     "DEFAULT_VERSION": "v1",
@@ -294,6 +297,31 @@ OTP_SETTINGS = {
 # ---------------------------------------------------------------------------
 SETUP_KEY = env_str("SETUP_KEY", "")
 SETUP_KEY_MIN_LENGTH = env_int("SETUP_KEY_MIN_LENGTH", 8)
+
+# ---------------------------------------------------------------------------
+# Password login
+#
+# A second way in, alongside OTP. Useful when the SMS gateway is unavailable,
+# and the only practical option where sending an SMS is not possible at all.
+#
+# A password is a *standing* credential - unlike an OTP it does not expire on
+# its own - so it needs its own brute-force protection rather than borrowing
+# the OTP flow's.
+# ---------------------------------------------------------------------------
+LOGIN_SETTINGS = {
+    "MAX_FAILED_ATTEMPTS": env_int("LOGIN_MAX_FAILED_ATTEMPTS", 5),
+    "LOCKOUT_SECONDS": env_int("LOGIN_LOCKOUT_SECONDS", 900),
+    "MIN_PASSWORD_LENGTH": env_int("MIN_PASSWORD_LENGTH", 8),
+}
+
+AUTH_PASSWORD_VALIDATORS = [
+    {
+        "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
+        "OPTIONS": {"min_length": LOGIN_SETTINGS["MIN_PASSWORD_LENGTH"]},
+    },
+    {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
+    {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
+]
 
 SMS_SETTINGS = {
     "BACKEND": env_str("SMS_BACKEND", "apps.accounts.sms.NimbusITSMSBackend"),

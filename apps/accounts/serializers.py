@@ -7,6 +7,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 
 from apps.accounts.constants import Platform, UserRole
@@ -78,6 +80,8 @@ class UserSerializer(serializers.ModelSerializer):
     # Surfaced so the app can hide buttons the server would refuse anyway.
     can_contribute = serializers.BooleanField(read_only=True)
     is_owner = serializers.BooleanField(read_only=True)
+    # Lets the app offer "Sign in with password" only when it would actually work.
+    has_password = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -90,11 +94,15 @@ class UserSerializer(serializers.ModelSerializer):
             "role_display",
             "can_contribute",
             "is_owner",
+            "has_password",
             "is_active",
             "last_login_at",
             "created_at",
         )
         read_only_fields = fields
+
+    def get_has_password(self, obj: User) -> bool:
+        return obj.has_usable_password()
 
 
 class ProfileUpdateSerializer(serializers.Serializer):
@@ -111,6 +119,29 @@ class ProfileUpdateSerializer(serializers.Serializer):
         if not attrs:
             raise serializers.ValidationError("Provide at least one field to update.")
         return attrs
+
+
+class PasswordField(serializers.CharField):
+    """A password, run through Django's configured validators.
+
+    Validating here means the same minimum length and common-password checks
+    apply wherever a password is set - the setup endpoint, a password change,
+    or the management command.
+    """
+
+    def __init__(self, **kwargs) -> None:
+        kwargs.setdefault("write_only", True)
+        kwargs.setdefault("style", {"input_type": "password"})
+        kwargs.setdefault("trim_whitespace", False)
+        super().__init__(**kwargs)
+
+    def to_internal_value(self, data: Any) -> str:
+        value = super().to_internal_value(data)
+        try:
+            validate_password(value)
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(list(exc.messages)) from exc
+        return value
 
 
 class SetupCreateUserSerializer(serializers.Serializer):
@@ -131,6 +162,50 @@ class SetupCreateUserSerializer(serializers.Serializer):
         default=UserRole.OWNER,
         help_text="owner = full control, staff = upload and manage own files, viewer = read-only.",
     )
+    password = PasswordField(
+        required=False,
+        allow_blank=True,
+        default="",
+        help_text=(
+            "Optional. Set one to enable password sign-in at /auth/login/. "
+            "Leave blank and the account can only sign in with an OTP."
+        ),
+    )
+
+    def validate_password(self, value: str) -> str:
+        # An empty string means "no password" and must skip validation, which
+        # would otherwise reject it for being too short.
+        return value
+
+
+class PasswordLoginSerializer(serializers.Serializer):
+    """Body for ``POST /auth/login/``."""
+
+    phone_number = PhoneNumberField(max_length=20)
+    password = serializers.CharField(
+        write_only=True, style={"input_type": "password"}, trim_whitespace=False
+    )
+    device_id = serializers.CharField(max_length=128, required=False, allow_blank=True, default="")
+    platform = serializers.ChoiceField(
+        choices=Platform.choices, required=False, default=Platform.UNKNOWN
+    )
+    model_name = serializers.CharField(max_length=120, required=False, allow_blank=True, default="")
+    app_version = serializers.CharField(max_length=40, required=False, allow_blank=True, default="")
+
+
+class ChangePasswordSerializer(serializers.Serializer):
+    """Body for ``POST /auth/change-password/``."""
+
+    current_password = serializers.CharField(
+        write_only=True,
+        required=False,
+        allow_blank=True,
+        default="",
+        style={"input_type": "password"},
+        trim_whitespace=False,
+        help_text="Required if you already have a password. Omit when setting your first one.",
+    )
+    new_password = PasswordField()
 
 
 class DeviceSerializer(serializers.ModelSerializer):

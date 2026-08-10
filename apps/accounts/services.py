@@ -314,7 +314,16 @@ class OTPService:
 
 
 class AuthService:
-    """Turns a verified user into a token pair, and ends the session."""
+    """Turns a verified user into a token pair, and ends the session.
+
+    Two ways in, both landing on the same token issuer:
+
+    * **OTP** - possession of the phone. No standing credential to steal.
+    * **Password** - a standing credential, so it carries its own lockout.
+
+    A password is only accepted for accounts that have one set; an OTP-only
+    account cannot be attacked through the password endpoint at all.
+    """
 
     def __init__(
         self,
@@ -325,6 +334,121 @@ class AuthService:
         self.otp = otp_service or OTPService()
         self.devices = device_repo or DeviceRepository()
         self.users = user_repo or UserRepository()
+
+    @property
+    def login_config(self) -> dict:
+        return settings.LOGIN_SETTINGS
+
+    # -- password brute-force protection ----------------------------------
+    @staticmethod
+    def _login_failure_key(phone: str) -> str:
+        return f"login:fail:{phone}"
+
+    @staticmethod
+    def _login_lock_key(phone: str) -> str:
+        return f"login:lock:{phone}"
+
+    def _assert_not_locked_out(self, phone: str) -> None:
+        locked_until = cache.get(self._login_lock_key(phone))
+        if locked_until:
+            remaining = int(max(locked_until - timezone.now().timestamp(), 1))
+            raise RateLimited(
+                detail="Too many failed sign-in attempts. Please try again later.",
+                code=ErrorCode.OTP_LOCKED,
+                details={"retry_after_seconds": remaining},
+            )
+
+    def _record_login_failure(self, phone: str) -> None:
+        key = self._login_failure_key(phone)
+        lockout = self.login_config["LOCKOUT_SECONDS"]
+        try:
+            failures = cache.incr(key)
+        except ValueError:
+            failures = 1
+            cache.set(key, 1, timeout=lockout)
+
+        if failures >= self.login_config["MAX_FAILED_ATTEMPTS"]:
+            cache.set(
+                self._login_lock_key(phone),
+                timezone.now().timestamp() + lockout,
+                timeout=lockout,
+            )
+            cache.delete(key)
+            logger.warning("login_lockout_triggered", extra={"phone": mask_phone(phone)})
+
+    def _clear_login_failures(self, phone: str) -> None:
+        cache.delete(self._login_failure_key(phone))
+        cache.delete(self._login_lock_key(phone))
+
+    def login_with_password(
+        self,
+        *,
+        phone_number: str,
+        password: str,
+        device_id: str = "",
+        platform: str = "unknown",
+        model_name: str = "",
+        app_version: str = "",
+        ip_address: str | None = None,
+    ) -> tuple[User, Device | None, AuthTokens]:
+        """Sign in with a mobile number and password."""
+        phone = normalize_phone_number(phone_number)
+        self._assert_not_locked_out(phone)
+
+        user = self.users.get_by_phone(phone)
+
+        # One message and one code for every failure - unknown number, wrong
+        # password, disabled account, OTP-only account. Distinguishing them
+        # would turn this endpoint into a way to discover who has an account.
+        def reject() -> None:
+            self._record_login_failure(phone)
+            logger.info("password_login_failed", extra={"phone": mask_phone(phone)})
+            raise ValidationFailed(
+                detail="Incorrect mobile number or password.",
+                code=ErrorCode.AUTHENTICATION_FAILED,
+                status_code=401,
+            )
+
+        if user is None or not user.is_active or not user.has_usable_password():
+            # Run the hasher anyway. Returning early would make a non-existent
+            # account measurably faster to reject than a wrong password, which
+            # is enough to enumerate valid numbers with a stopwatch.
+            User().set_password(password)
+            reject()
+
+        if not user.check_password(password):
+            reject()
+
+        self._clear_login_failures(phone)
+
+        device = self.devices.register_or_touch(
+            user=user,
+            device_id=device_id,
+            platform=platform,
+            model_name=model_name,
+            app_version=app_version,
+            ip=ip_address,
+        )
+
+        user.last_login_at = timezone.now()
+        user.save(update_fields=["last_login_at", "updated_at"])
+
+        logger.info(
+            "password_login_success", extra={"user_id": str(user.pk), "role": user.role}
+        )
+        return user, device, self.issue_tokens(user)
+
+    def set_password(self, user: User, new_password: str) -> User:
+        """Set or replace a user's password.
+
+        Django hashes it with PBKDF2 before it touches the database, so the
+        plain text exists only for the length of this call.
+        """
+        user.set_password(new_password)
+        user.save(update_fields=["password", "updated_at"])
+        self._clear_login_failures(user.phone_number)
+        logger.info("password_changed", extra={"user_id": str(user.pk)})
+        return user
 
     def login_with_otp(
         self,

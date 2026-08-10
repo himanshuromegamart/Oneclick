@@ -23,11 +23,13 @@ from apps.accounts.permissions import IsActiveUser
 from apps.accounts.repositories import DeviceRepository, UserRepository
 from apps.accounts.serializers import (
     AuthTokenSerializer,
+    ChangePasswordSerializer,
     DeviceSerializer,
     LogoutSerializer,
     OTPChallengeSerializer,
     OTPRequestSerializer,
     OTPVerifySerializer,
+    PasswordLoginSerializer,
     ProfileUpdateSerializer,
     SetupCreateUserSerializer,
     TokenRefreshRequestSerializer,
@@ -143,6 +145,112 @@ class VerifyOTPView(APIView):
             },
             request=request,
         )
+
+
+class PasswordLoginView(APIView):
+    """``POST /api/v1/auth/login/`` - sign in with a mobile number and password.
+
+    The alternative to the OTP flow, for when SMS is unavailable. Both routes
+    end at the same token issuer, so everything downstream is identical.
+
+    Only works for accounts that have a password set. An OTP-only account
+    cannot be attacked through this endpoint at all - there is no password to
+    guess.
+    """
+
+    permission_classes = (AllowAny,)
+    authentication_classes = ()
+    throttle_classes = (PhoneNumberScopedThrottle,)
+    throttle_scope = "login"
+
+    @extend_schema(
+        tags=["auth"],
+        request=PasswordLoginSerializer,
+        responses={
+            200: OpenApiResponse(AuthTokenSerializer, "Signed in."),
+            401: OpenApiResponse(description="Incorrect mobile number or password."),
+            429: OpenApiResponse(description="Locked out after repeated failures."),
+        },
+        summary="Sign in with a password",
+        description=(
+            "Returns the same token pair as the OTP flow.\n\n"
+            "Every failure answers `401 AUTHENTICATION_FAILED` with the same "
+            "message, whether the number is unknown, the password is wrong, "
+            "the account is disabled, or it has no password - so the response "
+            "cannot be used to discover who has an account.\n\n"
+            "Five failures locks that number for 15 minutes."
+        ),
+        auth=[],
+    )
+    def post(self, request: Request) -> Response:
+        serializer = PasswordLoginSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        user, device, tokens = AuthService().login_with_password(
+            phone_number=data["phone_number"],
+            password=data["password"],
+            device_id=data["device_id"],
+            platform=data["platform"],
+            model_name=data["model_name"],
+            app_version=data["app_version"],
+            ip_address=client_ip(request),
+        )
+        return ok(
+            {
+                "tokens": asdict(tokens),
+                "user": UserSerializer(user).data,
+                "device": DeviceSerializer(device).data if device else None,
+            },
+            request=request,
+        )
+
+
+class ChangePasswordView(APIView):
+    """``POST /api/v1/auth/change-password/`` - set or replace your own password."""
+
+    permission_classes = (IsActiveUser,)
+
+    @extend_schema(
+        tags=["auth"],
+        request=ChangePasswordSerializer,
+        responses={
+            200: DetailSerializer,
+            400: OpenApiResponse(description="Current password wrong, or new one too weak."),
+        },
+        summary="Set or change your password",
+        description=(
+            "Send `current_password` if you already have one. Omit it when "
+            "setting a password for the first time on an OTP-only account.\n\n"
+            "Existing tokens keep working - changing a password does not sign "
+            "other devices out. Use `/auth/logout/` for that."
+        ),
+    )
+    def post(self, request: Request) -> Response:
+        serializer = ChangePasswordSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        user = request.user
+        # Only demand the old password when there is one. Requiring it on an
+        # OTP-only account would make it impossible to ever set the first
+        # password without shell access.
+        if user.has_usable_password():
+            if not data["current_password"]:
+                raise ValidationFailed(
+                    detail="Enter your current password.",
+                    details={"field": "current_password"},
+                )
+            if not user.check_password(data["current_password"]):
+                logger.info("change_password_wrong_current", extra={"user_id": str(user.pk)})
+                raise ValidationFailed(
+                    detail="Your current password is incorrect.",
+                    details={"field": "current_password"},
+                )
+
+        AuthService().set_password(user, data["new_password"])
+        invalidate_auth_cache(user.pk)
+        return ok({"detail": "Password updated."}, request=request)
 
 
 class RefreshTokenView(APIView):
@@ -317,6 +425,9 @@ class SetupCreateUserView(APIView):
             email=data["email"],
             role=data["role"],
         )
+
+        if data.get("password"):
+            AuthService().set_password(user, data["password"])
 
         logger.warning(
             "setup_user_created",

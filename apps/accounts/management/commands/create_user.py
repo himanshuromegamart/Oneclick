@@ -7,10 +7,17 @@ registration screen and no user-management API. Examples::
     python manage.py create_user --phone 9812345678 --name "Ramesh" --role staff
     python manage.py create_user --phone 9812345678 --role viewer --update
     python manage.py create_user --phone 9812345678 --disable
+
+Add --password to enable password sign-in as well as OTP:
+
+    python manage.py create_user --phone 9876543210 --name "Sarah Aqua" \
+        --role owner --password "a-strong-password"
 """
 
 from __future__ import annotations
 
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.management.base import BaseCommand, CommandError
 
 from apps.accounts.constants import UserRole
@@ -31,6 +38,14 @@ class Command(BaseCommand):
             choices=[value for value, _ in UserRole.choices],
             default=UserRole.STAFF,
             help="owner = full control, staff = upload and manage own files, viewer = read-only",
+        )
+        parser.add_argument(
+            "--password",
+            default="",
+            help=(
+                "Optional. Enables password sign-in at /auth/login/. "
+                "Without one the account can only sign in with an OTP."
+            ),
         )
         parser.add_argument("--update", action="store_true", help="Update an existing user.")
         parser.add_argument("--disable", action="store_true", help="Switch the account off.")
@@ -66,12 +81,16 @@ class Command(BaseCommand):
             existing.role = options["role"]
             existing.is_deleted = False
             existing.is_active = True
+            if options["password"]:
+                self._validate_password(options["password"])
+                existing.set_password(options["password"])
             existing.full_clean(exclude=["password"])
             existing.save()
             self.stdout.write(
                 self.style.SUCCESS(
                     f"Updated {existing.full_name} <{existing.phone_number}> "
                     f"as {existing.get_role_display()}."
+                    + (" Password set." if options["password"] else "")
                 )
             )
             return
@@ -79,15 +98,34 @@ class Command(BaseCommand):
         if not options["name"]:
             raise CommandError("--name is required when creating a user.")
 
+        if options["password"]:
+            self._validate_password(options["password"])
+
         user = User.objects.create_user(
             phone_number=phone,
             full_name=options["name"],
             email=options["email"],
             role=options["role"],
         )
+
+        if options["password"]:
+            user.set_password(options["password"])
+            user.save(update_fields=["password", "updated_at"])
+            how = "They can sign in with this password, or with an OTP."
+        else:
+            how = "They sign in with an OTP sent to this number."
+
         self.stdout.write(
             self.style.SUCCESS(
-                f"Created {user.full_name} <{user.phone_number}> as {user.get_role_display()}.\n"
-                "They can now log in from the app - an OTP will be sent to this number."
+                f"Created {user.full_name} <{user.phone_number}> "
+                f"as {user.get_role_display()}.\n{how}"
             )
         )
+
+    @staticmethod
+    def _validate_password(password: str) -> None:
+        """Apply the same rules the API applies, so the two cannot diverge."""
+        try:
+            validate_password(password)
+        except DjangoValidationError as exc:
+            raise CommandError("Password rejected: " + " ".join(exc.messages)) from exc

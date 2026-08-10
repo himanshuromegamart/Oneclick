@@ -189,8 +189,86 @@ Asking for a page past the end returns `data: []` with HTTP 200, not an error.
 
 ## 3. Authentication
 
-Mobile number + OTP. **There is no signup** — accounts are created on the server
-by the owner.
+**Two ways in, both returning the same token pair:**
+
+| Route | Use when |
+|---|---|
+| `POST /auth/login/` | The account has a password set |
+| `POST /auth/otp/verify/` | Always available — a code is sent by SMS |
+
+**There is no signup.** Accounts are created on the server by the owner, or
+through the setup endpoint (section 3d).
+
+`GET /auth/me/` returns `has_password`, so the app can offer the password form
+only when it would actually work.
+
+---
+
+### 3a. Password sign-in
+
+```http
+POST /api/v1/auth/login/
+Content-Type: application/json
+
+{
+  "phone_number": "9876543210",
+  "password": "your-password",
+  "device_id": "optional-stable-id",
+  "platform": "android"
+}
+```
+
+Only `phone_number` and `password` are required.
+
+**200** — identical shape to the OTP response: `tokens`, `user`, `device`.
+
+```json
+{
+  "success": true,
+  "data": {
+    "tokens": {
+      "access": "eyJ...", "refresh": "eyJ...",
+      "access_expires_in": 1800, "refresh_expires_in": 2592000
+    },
+    "user": { "id": "...", "full_name": "...", "role": "owner",
+              "has_password": true, "can_contribute": true, "is_owner": true },
+    "device": null
+  }
+}
+```
+
+**Every failure returns the same `401 AUTHENTICATION_FAILED`** — "Incorrect
+mobile number or password" — whether the number is unknown, the password is
+wrong, the account is disabled, or it has no password at all. That is
+deliberate: distinguishing them would turn this endpoint into a way to discover
+who has an account.
+
+Five failures locks that number for 15 minutes (`429`, with
+`details.retry_after_seconds`). The lock is on the number, not the IP, so an
+attacker cannot simply switch networks.
+
+### 3b. Changing a password
+
+```http
+POST /api/v1/auth/change-password/
+Authorization: Bearer <access>
+
+{ "current_password": "old-one", "new_password": "the-new-one" }
+```
+
+Omit `current_password` when setting your first password on an OTP-only
+account. Passwords must be at least 8 characters, not all digits, and not a
+common password.
+
+Existing tokens keep working — changing a password does not sign other devices
+out. Use `/auth/logout/` for that.
+
+---
+
+### 3c. OTP sign-in
+
+Still fully supported, and the only route that works for an account with no
+password.
 
 ### Step 1 — request an OTP
 
@@ -364,6 +442,36 @@ GET /api/v1/auth/devices/
 ```
 
 A plain array of device objects. Not paginated.
+
+---
+
+### 3d. Creating the first account
+
+```http
+POST /api/v1/setup/create-user/
+
+{
+  "setup_key": "<the SETUP_KEY set on the server>",
+  "phone_number": "9876543210",
+  "full_name": "Owner Name",
+  "role": "owner",
+  "password": "optional-but-recommended"
+}
+```
+
+Exists because creating an account normally needs shell access on the server.
+Returns the created user (never the password).
+
+Include `password` and the account can sign in at `/auth/login/` straight away
+— worth doing if SMS delivery is not working yet. Omit it and the account is
+OTP-only.
+
+**Returns 404 unless `SETUP_KEY` is set** on the server, and it should be
+removed once the accounts you need exist. While it is set, anyone holding the
+key can create an owner account.
+
+Guards: constant-time key comparison, 10 attempts per hour per IP, keys under
+8 characters refused, every attempt logged.
 
 ---
 
