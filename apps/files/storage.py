@@ -27,6 +27,7 @@ from __future__ import annotations
 import abc
 import hashlib
 import logging
+import re
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -52,6 +53,32 @@ def resource_type_for(extension: str) -> str:
     if ext in VIDEO_EXTENSIONS:
         return "video"
     return "raw"
+
+
+#: Characters Cloudinary reads as URL or transformation syntax.
+_ATTACHMENT_UNSAFE = re.compile(r"[/\\,]")
+
+
+def _attachment_flag_name(filename: str) -> str:
+    """Make a filename safe to embed in ``fl_attachment:``.
+
+    **The extension must be removed.** Cloudinary parses a trailing ``.ext`` in
+    a transformation segment as a format specifier, so
+    ``fl_attachment:report.pdf`` is rejected outright with
+    ``400 Invalid flag in transformation: pdf`` and the download returns
+    nothing at all.
+
+    Putting the extension in the ``public_id`` instead does not help either -
+    that makes Cloudinary sign a different string and delivery fails with
+    ``401 deny or ACL failure``.
+
+    So the delivered file arrives without an extension. Clients should name the
+    saved file from the ``name`` field in the API response, which does carry
+    it; the flag exists only to force a download rather than an inline view.
+    """
+    stem = filename.rsplit(".", 1)[0] if "." in filename else filename
+    stem = _ATTACHMENT_UNSAFE.sub("-", stem).strip()
+    return stem or "download"
 
 
 @dataclass(slots=True)
@@ -244,7 +271,7 @@ class CloudinaryStorageBackend(StorageBackend):
             "secure": True,
         }
         if attachment_name:
-            options["flags"] = f"attachment:{attachment_name}"
+            options["flags"] = f"attachment:{_attachment_flag_name(attachment_name)}"
 
         url, _ = cloudinary.utils.cloudinary_url(public_id, **options)
         return url

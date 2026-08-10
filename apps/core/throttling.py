@@ -18,7 +18,19 @@ from __future__ import annotations
 
 from typing import Any
 
+from django.conf import settings
 from rest_framework.throttling import ScopedRateThrottle, SimpleRateThrottle
+
+
+def throttles(*classes: type) -> tuple[type, ...]:
+    """Return ``classes`` only when throttling is switched on.
+
+    Views declare their throttles through this helper so that
+    ``THROTTLING_ENABLED`` governs every one of them from a single place. The
+    alternative - commenting out ``throttle_classes`` on each view - is how you
+    end up with three of them still enforcing limits nobody expects.
+    """
+    return classes if getattr(settings, "THROTTLING_ENABLED", False) else ()
 
 
 class _IdentityMixin:

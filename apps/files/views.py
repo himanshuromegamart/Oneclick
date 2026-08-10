@@ -21,7 +21,7 @@ from apps.core.serializers import (
     SharedFileSerializer,
     UploadSignatureSerializer,
 )
-from apps.core.throttling import DownloadThrottle, SearchThrottle, UploadThrottle
+from apps.core.throttling import DownloadThrottle, SearchThrottle, UploadThrottle, throttles
 from apps.files.repositories import (
     FileFavoriteRepository,
     FileRepository,
@@ -482,7 +482,7 @@ class PublicShareView(APIView):
 
     permission_classes = (AllowAny,)
     authentication_classes = ()
-    throttle_classes = (DownloadThrottle,)
+    throttle_classes = throttles(DownloadThrottle)
 
     @extend_schema(
         tags=["share"],
@@ -677,7 +677,7 @@ class SearchView(APIView):
     """``GET /api/v1/search/`` - find a file by name, tag or description."""
 
     permission_classes = (IsActiveUser,)
-    throttle_classes = (SearchThrottle,)
+    throttle_classes = throttles(SearchThrottle)
 
     @extend_schema(
         tags=["search"],

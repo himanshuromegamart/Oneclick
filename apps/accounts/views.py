@@ -45,7 +45,7 @@ from apps.core.exceptions import (
 from apps.core.logging import mask_phone
 from apps.core.responses import created, ok
 from apps.core.serializers import DetailSerializer
-from apps.core.throttling import PhoneNumberScopedThrottle, SetupThrottle
+from apps.core.throttling import PhoneNumberScopedThrottle, SetupThrottle, throttles
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +55,7 @@ class RequestOTPView(APIView):
 
     permission_classes = (AllowAny,)
     authentication_classes = ()
-    throttle_classes = (PhoneNumberScopedThrottle,)
+    throttle_classes = throttles(PhoneNumberScopedThrottle)
     throttle_scope = "otp_request"
     is_resend = False
 
@@ -109,7 +109,7 @@ class VerifyOTPView(APIView):
 
     permission_classes = (AllowAny,)
     authentication_classes = ()
-    throttle_classes = (PhoneNumberScopedThrottle,)
+    throttle_classes = throttles(PhoneNumberScopedThrottle)
     throttle_scope = "otp_verify"
 
     @extend_schema(
@@ -160,7 +160,7 @@ class PasswordLoginView(APIView):
 
     permission_classes = (AllowAny,)
     authentication_classes = ()
-    throttle_classes = (PhoneNumberScopedThrottle,)
+    throttle_classes = throttles(PhoneNumberScopedThrottle)
     throttle_scope = "login"
 
     @extend_schema(
@@ -356,7 +356,7 @@ class SetupCreateUserView(APIView):
 
     permission_classes = (AllowAny,)
     authentication_classes = ()
-    throttle_classes = (SetupThrottle,)
+    throttle_classes = throttles(SetupThrottle)
 
     @extend_schema(
         tags=["setup"],

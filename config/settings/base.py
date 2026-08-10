@@ -209,9 +209,21 @@ REST_FRAMEWORK = {
     ),
     "EXCEPTION_HANDLER": "apps.core.exceptions.api_exception_handler",
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    # Throttling is off. Turn it back on with THROTTLING_ENABLED=true - the
+    # classes and rates below are kept intact so that is a one-variable change
+    # rather than a rewrite.
+    #
+    # What this does NOT switch off: the per-account lockouts on OTP and
+    # password login. Those live in the service layer and count failed
+    # credential attempts, which is the protection that actually matters
+    # against someone guessing their way into an account.
     "DEFAULT_THROTTLE_CLASSES": (
-        "apps.core.throttling.ScopedBurstThrottle",
-        "apps.core.throttling.ScopedSustainedThrottle",
+        (
+            "apps.core.throttling.ScopedBurstThrottle",
+            "apps.core.throttling.ScopedSustainedThrottle",
+        )
+        if env_bool("THROTTLING_ENABLED", False)
+        else ()
     ),
     "DEFAULT_THROTTLE_RATES": {
         "burst": "90/min",
@@ -311,6 +323,10 @@ OTP_SETTINGS = {
 # ---------------------------------------------------------------------------
 SETUP_KEY = env_str("SETUP_KEY", "")
 SETUP_KEY_MIN_LENGTH = env_int("SETUP_KEY_MIN_LENGTH", 8)
+
+#: Master switch for request throttling. Read by the views that opt in to a
+#: scope of their own, so one variable governs all of it.
+THROTTLING_ENABLED = env_bool("THROTTLING_ENABLED", False)
 
 # ---------------------------------------------------------------------------
 # Password login
