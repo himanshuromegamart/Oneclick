@@ -572,7 +572,9 @@ class BrowseView(APIView):
 
         folder_repo = FolderRepository()
         parent_id = request.query_params.get("parent_id")
-        parent = folder_repo.get_or_raise(parent_id, message="Folder not found.") if parent_id else None
+        parent = (
+            folder_repo.get_or_raise(parent_id, message="Folder not found.") if parent_id else None
+        )
 
         wanted = request.query_params.get("type", "")
         show_folders = wanted in {"", "folder"}
@@ -621,9 +623,7 @@ class BrowseView(APIView):
         items = [
             {"type": "folder", **FolderSerializer(folder, context=folder_ctx).data}
             for folder in folder_slice
-        ] + [
-            {"type": "file", **FileSerializer(file, context=file_ctx).data} for file in file_slice
-        ]
+        ] + [{"type": "file", **FileSerializer(file, context=file_ctx).data} for file in file_slice]
 
         total = folder_count + file_count
         total_pages = max((total + page_size - 1) // page_size, 1)

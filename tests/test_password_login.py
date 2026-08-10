@@ -108,9 +108,9 @@ class TestFailuresAreIndistinguishable:
     def test_all_four_give_the_same_message(self, api_client, password_user, db):
         User.objects.create_user(phone_number="9800000003", full_name="OTP Only")
         messages = {
-            self._failure(
-                api_client, phone_number=phone, password=password
-            ).data["error"]["message"]
+            self._failure(api_client, phone_number=phone, password=password).data["error"][
+                "message"
+            ]
             for phone, password in [
                 ("9800000001", "wrong-one-here"),
                 ("9800009999", "anything-here"),
@@ -286,9 +286,7 @@ class TestOTPStillWorks:
     """Password login is an addition, not a replacement."""
 
     def test_otp_login_still_works_for_a_password_user(self, api_client, password_user):
-        api_client.post(
-            "/api/v1/auth/otp/request/", {"phone_number": "9800000001"}, format="json"
-        )
+        api_client.post("/api/v1/auth/otp/request/", {"phone_number": "9800000001"}, format="json")
         code = re.search(r"\b(\d{6})\b", InMemorySMSBackend.last().message).group(1)
 
         response = api_client.post(
@@ -303,9 +301,7 @@ class TestOTPStillWorks:
             LOGIN_URL, {"phone_number": "9800000001", "password": PASSWORD}, format="json"
         ).data["data"]["tokens"]
 
-        api_client.post(
-            "/api/v1/auth/otp/request/", {"phone_number": "9800000001"}, format="json"
-        )
+        api_client.post("/api/v1/auth/otp/request/", {"phone_number": "9800000001"}, format="json")
         code = re.search(r"\b(\d{6})\b", InMemorySMSBackend.last().message).group(1)
         by_otp = api_client.post(
             "/api/v1/auth/otp/verify/",
@@ -324,10 +320,14 @@ class TestManagementCommand:
 
         call_command(
             "create_user",
-            "--phone", "9800000009",
-            "--name", "CLI User",
-            "--role", "owner",
-            "--password", PASSWORD,
+            "--phone",
+            "9800000009",
+            "--name",
+            "CLI User",
+            "--role",
+            "owner",
+            "--password",
+            PASSWORD,
         )
 
         user = User.objects.get(phone_number="+919800000009")

@@ -131,10 +131,49 @@ Open <http://localhost:8000/api/docs/> for the interactive API documentation.
 
 ---
 
+## The admin console
+
+`https://<your-service>/admin/` — a web UI for managing everything without
+needing a shell.
+
+**Only the Owner can get in.** Admin access is the `role` field, not a separate
+staff flag, so it can never drift out of step with the API's own rules. Staff
+and Viewer accounts are bounced back to the login screen.
+
+**You need a password to sign in** — the admin has no OTP form. Set one when
+creating the account, or via `POST /api/v1/auth/change-password/`.
+
+Sign in with your mobile number (any format — `9876543210` works) and password.
+
+What you can do there:
+
+| Screen | Use it for |
+|---|---|
+| **Users** | Create accounts, set passwords, change roles, disable people |
+| **Categories** | Browse the tree, rename, move, restore from the recycle bin |
+| **Documents** | Find files, edit tags, restore, permanently delete |
+| **Share links** | See active links and revoke any of them |
+| **Devices** | See where each account is signed in |
+| **OTP requests** | Diagnose "the code never arrived" (codes are hashed, never shown) |
+
+Deleting a user in the admin **disables and hides** them rather than erasing
+them, so the documents they uploaded keep their history. Same for categories
+and files — they go to the recycle bin, and only "Delete permanently" destroys
+anything.
+
+Uploading is not available in the admin: a file row typed in by hand would
+point at no stored object and every download of it would fail. Upload through
+the app or the API.
+
+> Set `ADMIN_URL` (e.g. `ADMIN_URL=secret-console/`) to move it off `/admin/`.
+> That will not stop a determined attacker, but it removes the service from the
+> constant background scanning aimed at that exact path.
+
+---
+
 ## Managing users
 
-There is no user-management screen, by design — accounts are created from the
-server:
+Besides the admin console, accounts can be created from the server:
 
 ```bash
 # Add someone who can upload and manage their own files

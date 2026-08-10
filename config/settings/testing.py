@@ -7,7 +7,7 @@ every external dependency is swapped for an in-memory or fake implementation.
 from __future__ import annotations
 
 from .base import *
-from .base import LOGGING, OTP_SETTINGS, REST_FRAMEWORK
+from .base import LOGGING, OTP_SETTINGS, REST_FRAMEWORK, STORAGES
 
 DEBUG = False
 ALLOWED_HOSTS = ["*"]
@@ -43,6 +43,14 @@ OTP_SETTINGS = {**OTP_SETTINGS, "DEBUG_BYPASS_CODE": ""}
 REST_FRAMEWORK = {**REST_FRAMEWORK, "DEFAULT_THROTTLE_CLASSES": ()}
 
 PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
+
+# Plain static storage, not the hashed-manifest one. The manifest backend
+# refuses to resolve any file that collectstatic has not processed, so every
+# admin page would raise "Missing staticfiles manifest entry" in a test run.
+STORAGES = {
+    **STORAGES,
+    "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
+}
 
 LOGGING["root"]["level"] = "ERROR"
 LOGGING["handlers"]["console"]["formatter"] = "plain"

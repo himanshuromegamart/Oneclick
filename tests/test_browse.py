@@ -61,9 +61,12 @@ class TestBrowse:
     def test_folders_sort_before_files(self, staff_client, mixed_folder):
         """A file browser shows folders first - and a stable order means
         pagination cannot interleave the two types."""
-        types = [item["type"] for item in staff_client.get(
-            f"/api/v1/browse/?parent_id={mixed_folder.pk}"
-        ).data["data"]]
+        types = [
+            item["type"]
+            for item in staff_client.get(f"/api/v1/browse/?parent_id={mixed_folder.pk}").data[
+                "data"
+            ]
+        ]
 
         assert types == ["folder", "folder", "file", "file", "file"]
 
@@ -93,17 +96,17 @@ class TestBrowse:
         assert meta["folder"]["name"] == "500 LPH"
 
     def test_can_show_only_folders(self, staff_client, mixed_folder):
-        items = staff_client.get(
-            f"/api/v1/browse/?parent_id={mixed_folder.pk}&type=folder"
-        ).data["data"]
+        items = staff_client.get(f"/api/v1/browse/?parent_id={mixed_folder.pk}&type=folder").data[
+            "data"
+        ]
 
         assert len(items) == 2
         assert all(item["type"] == "folder" for item in items)
 
     def test_can_show_only_files(self, staff_client, mixed_folder):
-        items = staff_client.get(
-            f"/api/v1/browse/?parent_id={mixed_folder.pk}&type=file"
-        ).data["data"]
+        items = staff_client.get(f"/api/v1/browse/?parent_id={mixed_folder.pk}&type=file").data[
+            "data"
+        ]
 
         assert len(items) == 3
         assert all(item["type"] == "file" for item in items)
@@ -133,9 +136,7 @@ class TestBrowsePagination:
 
         The slice has to span two tables without dropping or repeating a row.
         """
-        page1 = staff_client.get(
-            f"/api/v1/browse/?parent_id={mixed_folder.pk}&page_size=3"
-        ).data
+        page1 = staff_client.get(f"/api/v1/browse/?parent_id={mixed_folder.pk}&page_size=3").data
         page2 = staff_client.get(
             f"/api/v1/browse/?parent_id={mixed_folder.pk}&page_size=3&page=2"
         ).data
@@ -148,9 +149,9 @@ class TestBrowsePagination:
         assert len(ids) == len(set(ids)) == 5
 
     def test_pagination_metadata(self, staff_client, mixed_folder):
-        meta = staff_client.get(
-            f"/api/v1/browse/?parent_id={mixed_folder.pk}&page_size=3"
-        ).data["meta"]["pagination"]
+        meta = staff_client.get(f"/api/v1/browse/?parent_id={mixed_folder.pk}&page_size=3").data[
+            "meta"
+        ]["pagination"]
 
         assert meta["count"] == 5
         assert meta["total_pages"] == 2
@@ -188,9 +189,7 @@ class TestCreateAndUploadFlow:
         from django.core.files.uploadedfile import SimpleUploadedFile
 
         # 1. A top-level category.
-        response = staff_client.post(
-            "/api/v1/categories/", {"name": "Certificates"}, format="json"
-        )
+        response = staff_client.post("/api/v1/categories/", {"name": "Certificates"}, format="json")
         assert response.status_code == 201
         category_id = response.data["data"]["id"]
 

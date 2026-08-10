@@ -433,9 +433,7 @@ class AuthService:
         user.last_login_at = timezone.now()
         user.save(update_fields=["last_login_at", "updated_at"])
 
-        logger.info(
-            "password_login_success", extra={"user_id": str(user.pk), "role": user.role}
-        )
+        logger.info("password_login_success", extra={"user_id": str(user.pk), "role": user.role})
         return user, device, self.issue_tokens(user)
 
     def set_password(self, user: User, new_password: str) -> User:

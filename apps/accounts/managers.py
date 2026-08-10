@@ -46,6 +46,20 @@ class UserManager(BaseUserManager):
         extra.setdefault("is_active", True)
         return self.create_user(phone_number=phone_number, full_name=full_name, **extra)
 
+    def get_by_natural_key(self, username: str):
+        """Look up by phone number, normalising it first.
+
+        This is what the admin login form calls. Without the normalisation the
+        owner would have to type the stored E.164 form exactly - `+919876543210`
+        - and `9876543210` would fail with "please enter the correct phone
+        number", which reads like a wrong password.
+        """
+        try:
+            phone = normalize_phone_number(username)
+        except Exception:
+            phone = username
+        return self.get(**{self.model.USERNAME_FIELD: phone})
+
     def active(self):
         return self.get_queryset().filter(is_active=True)
 

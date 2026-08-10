@@ -84,9 +84,7 @@ class TestKeyChecking:
         assert response.status_code == 400
         assert not User.all_objects.exists()
 
-    def test_a_key_that_is_a_prefix_of_the_real_one_is_refused(
-        self, api_client, setup_key_enabled
-    ):
+    def test_a_key_that_is_a_prefix_of_the_real_one_is_refused(self, api_client, setup_key_enabled):
         """Guards against a comparison that stops at the first difference."""
         response = api_client.post(URL, {**PAYLOAD, "setup_key": "a-long"}, format="json")
 
@@ -152,9 +150,7 @@ class TestCreatedAccountWorks:
 
         assert api_client.post(URL, PAYLOAD, format="json").status_code == 201
 
-        api_client.post(
-            "/api/v1/auth/otp/request/", {"phone_number": "9876500001"}, format="json"
-        )
+        api_client.post("/api/v1/auth/otp/request/", {"phone_number": "9876500001"}, format="json")
         code = re.search(r"\b(\d{6})\b", InMemorySMSBackend.last().message).group(1)
 
         response = api_client.post(

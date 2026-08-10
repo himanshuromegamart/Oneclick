@@ -64,7 +64,9 @@ class TestActionRoutes:
     """Routes that a plain unit test would never exercise."""
 
     def test_category_favorites(self, staff_client, root_folder):
-        assert staff_client.post(f"/api/v1/categories/{root_folder.pk}/favorite/").status_code == 200
+        assert (
+            staff_client.post(f"/api/v1/categories/{root_folder.pk}/favorite/").status_code == 200
+        )
 
         response = staff_client.get("/api/v1/categories/favorites/")
         assert response.status_code == 200
@@ -84,7 +86,9 @@ class TestActionRoutes:
         assert staff_client.get(f"/api/v1/documents/{sample_file.pk}/versions/").status_code == 200
 
     def test_category_statistics(self, staff_client, child_folder):
-        assert staff_client.get(f"/api/v1/categories/{child_folder.pk}/statistics/").status_code == 200
+        assert (
+            staff_client.get(f"/api/v1/categories/{child_folder.pk}/statistics/").status_code == 200
+        )
 
     def test_category_children(self, staff_client, root_folder):
         assert staff_client.get(f"/api/v1/categories/{root_folder.pk}/children/").status_code == 200

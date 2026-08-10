@@ -9,6 +9,8 @@ There is no admin site and no web frontend - this is a backend-only service.
 
 from __future__ import annotations
 
+from django.conf import settings
+from django.contrib import admin
 from django.http import JsonResponse
 from django.urls import include, path
 from drf_spectacular.views import (
@@ -25,6 +27,7 @@ def api_root(request):
             "service": "Sarah Aqua Soft - Document Manager API",
             "versions": {"v1": "/api/v1/"},
             "documentation": "/api/docs/",
+            "admin": f"/{settings.ADMIN_URL}",
             "health": "/health/",
         }
     )
@@ -37,6 +40,9 @@ v1_patterns = [
 ]
 
 urlpatterns = [
+    # The owner's console. Path is configurable via ADMIN_URL so it can be
+    # moved off the default that scanners hammer.
+    path(settings.ADMIN_URL, admin.site.urls),
     path("", api_root, name="api-root"),
     path("", include("apps.core.urls")),
     path("api/v1/", include((v1_patterns, "v1"), namespace="v1")),

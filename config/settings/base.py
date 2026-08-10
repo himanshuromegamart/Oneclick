@@ -36,8 +36,15 @@ AUTH_USER_MODEL = "accounts.User"
 # Applications
 # ---------------------------------------------------------------------------
 DJANGO_APPS = [
+    # The admin site is the owner's console: with no shell on the hosting plan,
+    # it is the only way to inspect and repair data directly. It brings
+    # sessions, messages and CSRF along with it - all of which the JSON API
+    # itself neither uses nor needs.
+    "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
+    "django.contrib.sessions",
+    "django.contrib.messages",
     "django.contrib.postgres",  # SearchVector, ArrayField, GIN/trigram indexes
     "django.contrib.staticfiles",
 ]
@@ -61,40 +68,44 @@ LOCAL_APPS = [
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
 
-# NOTE: ``django.contrib.admin`` and ``django.contrib.sessions`` are deliberately
-# absent.  The product is a backend-only JWT API with no web frontend and no
-# admin dashboard UI, so session cookies and the admin site are pure attack
-# surface.  CSRF middleware is likewise unnecessary for a cookie-less API and is
-# documented as such in docs/10-security-architecture.md.
-
 MIDDLEWARE = [
     "django_structlog.middlewares.RequestMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
+    "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
+    # CSRF is here for the admin site's HTML forms. It does not affect the API:
+    # DRF wraps every APIView in csrf_exempt, and the API authenticates with a
+    # Bearer token that no browser attaches on its own.
+    "django.middleware.csrf.CsrfViewMiddleware",
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.gzip.GZipMiddleware",
-    # The API returns JSON, but /api/docs/ serves a real HTML page - so the
-    # clickjacking header is worth setting rather than assuming no HTML exists.
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "apps.core.middleware.RequestIDMiddleware",
     "apps.core.middleware.CurrentRequestMiddleware",
     "apps.core.middleware.APIExceptionMiddleware",
 ]
 
+# The admin lives at a configurable path. Moving it off the default /admin/
+# will not stop a determined attacker, but it does remove the service from the
+# large volume of untargeted scanning traffic aimed at that exact URL.
+ADMIN_URL = env_str("ADMIN_URL", "admin/")
+
+# Session cookies exist only for the admin. Locking them down costs nothing.
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = "Lax"
+SESSION_COOKIE_AGE = env_int("SESSION_COOKIE_AGE", 60 * 60 * 8)
+SESSION_EXPIRE_AT_BROWSER_CLOSE = True
+CSRF_COOKIE_HTTPONLY = False  # the admin's JavaScript reads this one
+CSRF_COOKIE_SAMESITE = "Lax"
+
 # Deliberate design decisions, not oversights - silenced so a real warning is
-# not lost in the noise:
-#
-# security.W003  CSRF middleware absent. CSRF only exists because browsers
-#                attach cookies automatically. This API has no cookies and no
-#                sessions; every request carries an explicit Bearer token,
-#                which nothing attaches on the caller's behalf.
-# W001 / W002    drf-spectacular cannot introspect a plain ViewSet's queryset.
-#                Every action declares its request and response explicitly with
-#                @extend_schema, and tests/test_api_surface.py asserts the
-#                schema builds correctly.
+# not lost in the noise. drf-spectacular cannot introspect a plain ViewSet's
+# queryset; every action declares its request and response explicitly with
+# @extend_schema, and tests/test_api_surface.py asserts the schema builds.
 SILENCED_SYSTEM_CHECKS = [
-    "security.W003",
     "drf_spectacular.W001",
     "drf_spectacular.W002",
 ]
@@ -109,6 +120,9 @@ TEMPLATES = [
                 "django.template.context_processors.debug",
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
+                # Required by the admin, which uses the messages framework for
+                # its "saved successfully" banners.
+                "django.contrib.messages.context_processors.messages",
             ],
         },
     },

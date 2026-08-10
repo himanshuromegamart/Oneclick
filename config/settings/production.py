@@ -76,6 +76,25 @@ SECURE_CROSS_ORIGIN_OPENER_POLICY = "same-origin"
 X_FRAME_OPTIONS = "DENY"
 
 # ---------------------------------------------------------------------------
+# Admin session security
+#
+# The admin is the only part of this service that uses cookies, and it is also
+# the part that can change anything. Both cookies are HTTPS-only here, so a
+# session cannot be lifted off a plain-HTTP request.
+# ---------------------------------------------------------------------------
+SESSION_COOKIE_SECURE = True
+CSRF_COOKIE_SECURE = True
+
+# Django checks the Origin header on unsafe requests over HTTPS. Without the
+# host listed here, logging into the admin fails with "CSRF verification
+# failed" even though the credentials are right.
+CSRF_TRUSTED_ORIGINS = [f"https://{host}" for host in ALLOWED_HOSTS if "*" not in host]
+if _RENDER_HOST:
+    CSRF_TRUSTED_ORIGINS.append(f"https://{_RENDER_HOST}")
+CSRF_TRUSTED_ORIGINS.extend(env_list("CSRF_TRUSTED_ORIGINS", []))
+CSRF_TRUSTED_ORIGINS = sorted(set(CSRF_TRUSTED_ORIGINS))
+
+# ---------------------------------------------------------------------------
 # Database
 #
 # Managed providers (Neon, Render Postgres, Supabase) hand out a single

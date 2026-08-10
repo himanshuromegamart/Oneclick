@@ -67,6 +67,32 @@ class User(UUIDModel, TimeStampedModel, AbstractBaseUser):
     def is_owner(self) -> bool:
         return self.role == UserRole.OWNER
 
+    # -- Django admin -----------------------------------------------------
+    #
+    # The admin asks the user object three questions. Answering them from the
+    # `role` field means admin access needs no `is_staff`/`is_superuser`
+    # columns, no PermissionsMixin, and no migration - and it can never drift
+    # out of step with the API's own rules, because there is only one source of
+    # truth for who is privileged.
+    @property
+    def is_staff(self) -> bool:
+        """May open the admin site at all."""
+        return self.is_owner
+
+    @property
+    def is_superuser(self) -> bool:
+        return self.is_owner
+
+    def has_perm(self, perm: str, obj=None) -> bool:
+        """Owners may do anything in the admin; nobody else gets in."""
+        return self.is_owner
+
+    def has_perms(self, perm_list, obj=None) -> bool:
+        return self.is_owner
+
+    def has_module_perms(self, app_label: str) -> bool:
+        return self.is_owner
+
     @property
     def can_contribute(self) -> bool:
         """May create categories and upload files."""
