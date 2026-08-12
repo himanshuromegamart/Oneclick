@@ -1068,8 +1068,16 @@ POST /api/v1/documents/<id>/share/
 { "expires_in_hours": 168, "max_downloads": 10, "note": "For Ramesh Traders" }
 ```
 
-All three optional. Default expiry 7 days, maximum 90. `max_downloads: null`
-means unlimited until it expires.
+All three optional.
+
+**By default the link never expires.** Omit `expires_in_hours` and it keeps
+working until you revoke it, the download cap is reached, or the file is
+deleted. Pass a number to give it a deadline.
+
+`max_downloads: null` means unlimited.
+
+> Since a link with no expiry only stops when revoked, `GET /share-links/` is
+> where you review and withdraw them.
 
 **201**
 

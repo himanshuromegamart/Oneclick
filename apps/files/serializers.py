@@ -123,9 +123,21 @@ class FileVersionSerializer(serializers.ModelSerializer):
 
 class ShareLinkCreateSerializer(serializers.Serializer):
     expires_in_hours = serializers.IntegerField(
-        required=False, min_value=1, max_value=24 * 90, allow_null=True
+        required=False,
+        min_value=1,
+        allow_null=True,
+        help_text=(
+            "Optional. Omit it and the link never expires - it then stops "
+            "working only when you revoke it, when the download cap is "
+            "reached, or when the file is deleted."
+        ),
     )
-    max_downloads = serializers.IntegerField(required=False, min_value=1, allow_null=True)
+    max_downloads = serializers.IntegerField(
+        required=False,
+        min_value=1,
+        allow_null=True,
+        help_text="Optional. Omit for unlimited downloads.",
+    )
     note = serializers.CharField(max_length=255, required=False, allow_blank=True, default="")
 
 

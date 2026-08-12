@@ -96,8 +96,20 @@ ADMIN_URL = env_str("ADMIN_URL", "admin/")
 # Session cookies exist only for the admin. Locking them down costs nothing.
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = "Lax"
-SESSION_COOKIE_AGE = env_int("SESSION_COOKIE_AGE", 60 * 60 * 8)
-SESSION_EXPIRE_AT_BROWSER_CLOSE = True
+
+# How long an admin stays signed in. 12 hours covers a working day without
+# asking for the password again mid-task.
+SESSION_COOKIE_AGE = env_int("SESSION_COOKIE_AGE", 60 * 60 * 12)
+
+# Keep this False, or SESSION_COOKIE_AGE above is silently meaningless: with it
+# True, Django writes a cookie carrying no expiry at all, so the browser drops
+# it whenever it decides the session ended. Mobile browsers do that eagerly -
+# switching apps can be enough - which reads as being logged out instantly.
+SESSION_EXPIRE_AT_BROWSER_CLOSE = env_bool("SESSION_EXPIRE_AT_BROWSER_CLOSE", False)
+
+# Refresh the cookie on each request, so an admin who is actively working is
+# never signed out mid-edit.
+SESSION_SAVE_EVERY_REQUEST = True
 CSRF_COOKIE_HTTPONLY = False  # the admin's JavaScript reads this one
 CSRF_COOKIE_SAMESITE = "Lax"
 

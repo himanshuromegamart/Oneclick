@@ -489,14 +489,17 @@ class ShareService:
         max_downloads: int | None = None,
         note: str = "",
     ) -> ShareLink:
-        hours = expires_in_hours or self.config["SHARE_LINK_TTL_HOURS"]
-        # A link that never expires is indistinguishable from publishing the
-        # file, so the ceiling is enforced rather than merely defaulted.
-        hours = max(1, min(hours, 24 * 90))
+        # No expiry unless one is asked for. The link then stays valid until it
+        # is revoked, hits its download cap, or the file is deleted - so
+        # revoking is the way to withdraw it, and the share-links screen is
+        # where you go to do that.
+        expires_at = None
+        if expires_in_hours:
+            expires_at = timezone.now() + timedelta(hours=max(1, expires_in_hours))
 
         link = ShareLink.objects.create(
             file=file,
-            expires_at=timezone.now() + timedelta(hours=hours),
+            expires_at=expires_at,
             max_downloads=max_downloads,
             recipient_note=note[:255],
             created_by=actor,

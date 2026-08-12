@@ -258,7 +258,10 @@ class ShareLink(BaseModel):
     token = models.CharField(
         max_length=64, unique=True, default=_generate_share_token, db_index=True
     )
-    expires_at = models.DateTimeField(db_index=True)
+    #: Null means the link never lapses on its own. It then stops working only
+    #: when revoked, when a download cap is reached, or when the file is
+    #: deleted - so revoking becomes the only way to withdraw it.
+    expires_at = models.DateTimeField(null=True, blank=True, db_index=True)
     max_downloads = models.PositiveIntegerField(
         null=True, blank=True, help_text="Null means unlimited until expiry."
     )
@@ -281,6 +284,9 @@ class ShareLink(BaseModel):
 
     @property
     def is_expired(self) -> bool:
+        # No expiry set means it never expires - not "expired since 1970".
+        if self.expires_at is None:
+            return False
         return timezone.now() >= self.expires_at
 
     @property

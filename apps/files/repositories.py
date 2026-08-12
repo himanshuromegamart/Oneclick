@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 
-from django.db.models import F, QuerySet
+from django.db.models import F, Q, QuerySet
 from django.utils import timezone
 
 from apps.core.repositories import BaseRepository
@@ -160,14 +160,28 @@ class ShareLinkRepository(BaseRepository[ShareLink]):
         return self.get_queryset().filter(token=token).first()
 
     def active_for_file(self, file: FileAsset) -> QuerySet[ShareLink]:
-        return self.get_queryset().filter(
-            file=file, revoked_at__isnull=True, expires_at__gt=timezone.now()
+        return (
+            self.get_queryset()
+            .filter(file=file, revoked_at__isnull=True)
+            .filter(
+                # A null expiry means the link never lapses, so it counts as active.
+                Q(expires_at__isnull=True) | Q(expires_at__gt=timezone.now())
+            )
         )
 
     def created_by_user(self, user) -> QuerySet[ShareLink]:
         return self.get_queryset().filter(created_by=user).order_by("-created_at")
 
     def expire_stale(self) -> int:
+        """Mark lapsed links revoked, so listings show their real state.
+
+        Links with no expiry are excluded explicitly. SQL would drop them
+        anyway - NULL fails every comparison - but relying on that quietly
+        would make this the first thing to break if the filter is ever
+        rewritten.
+        """
         return ShareLink.objects.filter(
-            expires_at__lt=timezone.now(), revoked_at__isnull=True
+            expires_at__isnull=False,
+            expires_at__lt=timezone.now(),
+            revoked_at__isnull=True,
         ).update(revoked_at=timezone.now())

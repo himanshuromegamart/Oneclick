@@ -218,6 +218,48 @@ class TestSharing:
         assert payload["name"] == file.name
         assert payload["url"]
 
+    def test_links_never_expire_by_default(self, file_service, staff, child_folder):
+        """Omitting an expiry means the link keeps working until it is revoked."""
+        file = upload(file_service, staff, child_folder)
+        share = ShareService(storage=InMemoryStorageBackend())
+
+        link = share.create_for_file(staff, file)
+
+        assert link.expires_at is None
+        assert link.is_expired is False
+        assert link.is_usable is True
+
+        # Still resolvable a long time later - nothing lapses on its own.
+        _, payload = share.resolve(link.token)
+        assert payload["url"]
+
+    def test_a_link_with_no_expiry_survives_the_sweep(self, file_service, staff, child_folder):
+        """The nightly job must not revoke links that were never given a date."""
+        from apps.files.repositories import ShareLinkRepository
+
+        file = upload(file_service, staff, child_folder)
+        share = ShareService(storage=InMemoryStorageBackend())
+        forever = share.create_for_file(staff, file)
+        lapsing = share.create_for_file(staff, file, expires_in_hours=1)
+
+        ShareLink.objects.filter(pk=lapsing.pk).update(
+            expires_at=timezone.now() - timezone.timedelta(hours=2)
+        )
+        swept = ShareLinkRepository().expire_stale()
+
+        forever.refresh_from_db()
+        lapsing.refresh_from_db()
+        assert swept == 1
+        assert forever.revoked_at is None
+        assert lapsing.revoked_at is not None
+
+    def test_an_explicit_expiry_is_still_honoured(self, file_service, staff, child_folder):
+        file = upload(file_service, staff, child_folder)
+        share = ShareService(storage=InMemoryStorageBackend())
+
+        link = share.create_for_file(staff, file, expires_in_hours=24)
+        assert link.expires_at is not None
+
     def test_expired_link_is_refused(self, file_service, staff, child_folder):
         file = upload(file_service, staff, child_folder)
         share = ShareService(storage=InMemoryStorageBackend())
