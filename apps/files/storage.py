@@ -263,11 +263,44 @@ class CloudinaryStorageBackend(StorageBackend):
         import cloudinary.utils
 
         ttl = ttl_seconds or self.config["SIGNED_URL_TTL_SECONDS"]
+        expires_at = int(time.time()) + ttl
+
+        if resource_type == "raw":
+            # Raw assets - PDF, Word, Excel, archives - must go through the
+            # download API, not the CDN URL builder.
+            #
+            # Cloudinary keeps the file extension inside a raw public_id
+            # ("…/abc123.pdf"), but cloudinary_url() treats a trailing ".ext"
+            # as a format and strips it before signing. The CDN then verifies
+            # the signature over the full id including ".pdf", the two never
+            # match, and delivery fails with:
+            #
+            #     HTTP 401  x-cld-error: deny or ACL failure
+            #
+            # The error names access control, which sends you looking at ACLs
+            # and API keys; the signature is the actual cause. No combination
+            # of cloudinary_url arguments fixes it - passing the extension as
+            # `format` produces a byte-identical signature.
+            #
+            # private_download_url signs the whole public_id and is
+            # Cloudinary's documented call for authenticated assets.
+            return cloudinary.utils.private_download_url(
+                public_id,
+                "",  # the extension is already part of public_id for raw
+                resource_type="raw",
+                type="authenticated",
+                attachment=bool(attachment_name),
+                expires_at=expires_at,
+            )
+
+        # Images and video keep their extension in a separate `format` field,
+        # so their public_ids carry no dot and the CDN builder works - which is
+        # what we want, since it is also what supports thumbnails.
         options: dict[str, Any] = {
             "resource_type": resource_type,
             "type": "authenticated",
             "sign_url": True,
-            "expires_at": int(time.time()) + ttl,
+            "expires_at": expires_at,
             "secure": True,
         }
         if attachment_name:
