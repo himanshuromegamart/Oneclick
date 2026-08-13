@@ -281,7 +281,13 @@ SPECTACULAR_SETTINGS = {
 # JWT
 # ---------------------------------------------------------------------------
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=env_int("JWT_ACCESS_MINUTES", 30)),
+    # 24 hours. An access token cannot be revoked before it expires - that is
+    # inherent to a stateless JWT - so this is also the longest a stolen token
+    # stays usable. Chosen deliberately for a small, known set of staff on
+    # company devices: it keeps them signed in for a working day, and the app
+    # does not have to handle a refresh mid-session. Shorten it via
+    # JWT_ACCESS_MINUTES if the user base ever widens.
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=env_int("JWT_ACCESS_MINUTES", 1440)),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=env_int("JWT_REFRESH_DAYS", 30)),
     "ROTATE_REFRESH_TOKENS": True,
     "BLACKLIST_AFTER_ROTATION": True,

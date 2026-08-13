@@ -228,7 +228,7 @@ Only `phone_number` and `password` are required.
   "data": {
     "tokens": {
       "access": "eyJ...", "refresh": "eyJ...",
-      "access_expires_in": 1800, "refresh_expires_in": 2592000
+      "access_expires_in": 86400, "refresh_expires_in": 2592000
     },
     "user": { "id": "...", "full_name": "...", "role": "owner",
               "has_password": true, "can_contribute": true, "is_owner": true },
@@ -334,7 +334,7 @@ Only `phone_number` and `otp` are required. The rest just populates the
     "tokens": {
       "access": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
       "refresh": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-      "access_expires_in": 1800,
+      "access_expires_in": 86400,
       "refresh_expires_in": 2592000
     },
     "user": {
@@ -383,7 +383,9 @@ On every request except `/auth/otp/*`, `/auth/token/refresh/`,
 
 ### Step 4 — refresh
 
-Access tokens last **30 minutes**; refresh tokens **30 days**.
+Access tokens last **24 hours**; refresh tokens **30 days**.
+
+`access_expires_in` is seconds (86400). Read it from the response rather than hard-coding a number - it is configurable server-side and may change.
 
 ```http
 POST /api/v1/auth/token/refresh/
@@ -393,7 +395,7 @@ POST /api/v1/auth/token/refresh/
 
 ```json
 { "access": "eyJ...", "refresh": "eyJ...",
-  "access_expires_in": 1800, "refresh_expires_in": 2592000 }
+  "access_expires_in": 86400, "refresh_expires_in": 2592000 }
 ```
 
 > **Refresh tokens are single-use.** Every call returns a *new* refresh token.
