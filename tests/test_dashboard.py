@@ -12,6 +12,7 @@ from django.test import Client
 from django.urls import reverse
 
 from apps.accounts.models import User
+from apps.dashboard.forms import PATH_SEPARATOR
 from apps.folders.models import Folder
 
 pytestmark = pytest.mark.django_db
@@ -274,6 +275,102 @@ class TestCreatingCategories:
             reverse("dashboard:categories"), {"name": "Traceable", "parent": "", "description": ""}
         )
         assert Folder.objects.get(name="Traceable").created_by == owner
+
+
+class TestParentPicker:
+    """The dropdown has to stay usable once there are hundreds of categories."""
+
+    def test_options_show_the_full_path(self, client_owner, child_folder):
+        """A bare name is ambiguous - several products have a "500 LPH"."""
+        from apps.folders.repositories import FolderRepository
+
+        leaf = FolderRepository().create_folder(
+            name="500 LPH", parent=child_folder, created_by=child_folder.created_by
+        )
+
+        response = client_owner.get(reverse("dashboard:categories"))
+        expected = PATH_SEPARATOR.join(
+            [child_folder.parent.name, child_folder.name, leaf.name]
+        )
+        assert expected.encode() in response.content
+
+    def test_same_name_under_different_parents_is_distinguishable(
+        self, client_owner, owner, root_folder
+    ):
+        from apps.folders.repositories import FolderRepository
+
+        repo = FolderRepository()
+        atm = repo.create_folder(name="Water ATM", parent=root_folder, created_by=owner)
+        cooler = repo.create_folder(name="Water Cooler", parent=root_folder, created_by=owner)
+        repo.create_folder(name="500 LPH", parent=atm, created_by=owner)
+        repo.create_folder(name="500 LPH", parent=cooler, created_by=owner)
+
+        content = client_owner.get(reverse("dashboard:categories")).content
+
+        assert f"Water ATM{PATH_SEPARATOR}500 LPH".encode() in content
+        assert f"Water Cooler{PATH_SEPARATOR}500 LPH".encode() in content
+
+    def test_the_select_is_marked_searchable(self, client_owner, root_folder):
+        """The JS upgrades anything carrying this attribute."""
+        response = client_owner.get(reverse("dashboard:categories"))
+        assert b"data-searchable" in response.content
+
+    def test_a_top_level_option_is_always_offered(self, client_owner, root_folder):
+        response = client_owner.get(reverse("dashboard:categories"))
+        assert b"Top level" in response.content
+
+    def test_labels_do_not_cost_a_query_per_ancestor(self, client_owner, owner):
+        """Paths come from the stored materialised path, not by walking parents.
+
+        The naive version of this feature - following .parent up the tree to
+        build each label - is invisible on the two categories a test usually
+        has, and quietly turns the page into hundreds of queries in
+        production. So this pins the count instead of trusting the code.
+        """
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        from apps.folders.repositories import FolderRepository
+
+        repo = FolderRepository()
+        url = reverse("dashboard:categories")
+
+        def render_query_count() -> int:
+            with CaptureQueriesContext(connection) as queries:
+                assert client_owner.get(url).status_code == 200
+            return len(queries)
+
+        parent = repo.create_folder(name="Level 0", parent=None, created_by=owner)
+        shallow = render_query_count()
+
+        for level in range(1, 12):
+            parent = repo.create_folder(name=f"Level {level}", parent=parent, created_by=owner)
+        deep = render_query_count()
+
+        # A chain of 12 is both deeper and larger than a chain of 1, so equality
+        # here rules out scaling on either.
+        assert deep == shallow
+        assert f"Level 0{PATH_SEPARATOR}Level 1".encode() in client_owner.get(url).content
+
+    def test_a_large_tree_still_renders(self, client_owner, owner, root_folder):
+        from apps.folders.models import Folder
+
+        Folder.objects.bulk_create(
+            [
+                Folder(
+                    name=f"Category {index:03d}",
+                    parent=root_folder,
+                    path=root_folder.subtree_prefix,
+                    depth=1,
+                    created_by=owner,
+                )
+                for index in range(200)
+            ]
+        )
+
+        response = client_owner.get(reverse("dashboard:categories"))
+        assert response.status_code == 200
+        assert b"Category 199" in response.content
 
 
 class TestPagesRender:

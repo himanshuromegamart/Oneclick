@@ -87,5 +87,9 @@
     </div>
   </div>
 </div>
+
+{# Upgrades any select[data-searchable] into a search box. Deferred, and the
+   native select works on its own if this never loads. #}
+<script src="{% static 'dashboard/combobox.js' %}" defer></script>
 </body>
 </html>

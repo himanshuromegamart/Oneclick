@@ -285,6 +285,68 @@ tbody tr:hover { background: #fafcfe; }
 .empty { padding: 40px 20px; text-align: center; color: var(--ink-faint); }
 .empty strong { display: block; color: var(--ink-soft); margin-bottom: 3px; }
 
+/* --- searchable dropdown ------------------------------------------------- */
+
+.combo { position: relative; }
+
+.combo-input {
+  width: 100%;
+  padding: 10px 12px;
+  font: inherit;
+  font-size: 14.5px;
+  color: var(--ink);
+  background: #fff
+    /* A small chevron, inline so there is no image request. */
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' d='M1 1l5 5 5-5'/%3E%3C/svg%3E")
+    no-repeat right 13px center;
+  border: 1px solid #cbd5e1;
+  border-radius: var(--radius);
+  transition: border-color .12s, box-shadow .12s;
+}
+.combo-input:focus {
+  outline: none;
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px rgba(11, 111, 181, .13);
+}
+
+.combo-list {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  /* Capped so a long list scrolls inside the dropdown rather than pushing the
+     submit button off the screen. */
+  max-height: 264px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 5px;
+  list-style: none;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  -webkit-overflow-scrolling: touch;
+}
+
+.combo-option {
+  padding: 9px 11px;
+  border-radius: 7px;
+  font-size: 14px;
+  cursor: pointer;
+  /* Deep paths are long; wrap rather than clip so the tail stays readable. */
+  overflow-wrap: anywhere;
+}
+.combo-option:hover,
+.combo-option.is-active { background: var(--brand-tint); color: var(--brand-dark); }
+
+.combo-empty {
+  padding: 13px 11px;
+  font-size: 13.5px;
+  color: var(--ink-faint);
+  text-align: center;
+}
+
 /* --- login --------------------------------------------------------------- */
 
 .login-page {

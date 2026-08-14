@@ -16,6 +16,10 @@ from apps.core.exceptions import ValidationFailed
 from apps.core.validators import normalize_phone_number, validate_node_name
 from apps.folders.models import Folder
 
+# What separates the segments of a category path in a dropdown label. Written as
+# an escape so it survives editors and terminals that mangle the character.
+PATH_SEPARATOR = " \N{SINGLE RIGHT-POINTING ANGLE QUOTATION MARK} "
+
 
 class LoginForm(forms.Form):
     phone_number = forms.CharField(
@@ -128,8 +132,9 @@ class CategoryForm(forms.Form):
         label="Inside",
         queryset=Folder.objects.none(),
         required=False,
-        empty_label="— Top level —",
-        help_text="Leave as top level to create a main category.",
+        empty_label="Top level",
+        help_text="Start typing to search. Leave as top level for a main category.",
+        widget=forms.Select(attrs={"data-searchable": "true"}),
     )
     description = forms.CharField(
         label="Description",
@@ -139,11 +144,27 @@ class CategoryForm(forms.Form):
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
+
         # Rebuilt per request so a category added a moment ago is selectable.
-        self.fields["parent"].queryset = Folder.objects.order_by("path", "name")
-        self.fields["parent"].label_from_instance = (
-            lambda folder: f"{'— ' * folder.depth}{folder.name}"
-        )
+        folders = list(Folder.objects.order_by("path", "position", "name"))
+        self.fields["parent"].queryset = Folder.objects.order_by("path", "position", "name")
+
+        # Label each option with its full path rather than its bare name.
+        # Names repeat - a tree of any size has several "500 LPH" under
+        # different products - and a list of identical labels is worse than no
+        # list at all. The path also gives the search something to match on, so
+        # typing "cooler 40" finds Products > Water Cooler > 40 Litre.
+        #
+        # The ancestor ids come from the stored materialised path, so building
+        # every label costs one query however deep the tree goes.
+        names = {folder.pk: folder.name for folder in folders}
+
+        def full_path(folder: Folder) -> str:
+            parts = [names[pk] for pk in folder.ancestor_ids if pk in names]
+            parts.append(folder.name)
+            return PATH_SEPARATOR.join(parts)
+
+        self.fields["parent"].label_from_instance = full_path
 
     def clean_name(self) -> str:
         try:
