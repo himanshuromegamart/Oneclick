@@ -48,6 +48,53 @@ def category_for_extension(extension: str) -> str:
     return _CATEGORY_BY_EXTENSION.get(extension.lower().lstrip("."), FileCategory.OTHER)
 
 
+# Explicit rather than relying on the `mimetypes` module: its answers come from
+# the host's registry or /etc/mime.types, so the same file can be labelled
+# differently on a developer's Windows machine and on the Linux container. A
+# fixed table means the client is told the same type either way.
+_MIME_BY_EXTENSION = {
+    "pdf": "application/pdf",
+    "doc": "application/msword",
+    "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "xls": "application/vnd.ms-excel",
+    "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "ppt": "application/vnd.ms-powerpoint",
+    "pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    "csv": "text/csv",
+    "txt": "text/plain",
+    "rtf": "application/rtf",
+    "jpg": "image/jpeg",
+    "jpeg": "image/jpeg",
+    "png": "image/png",
+    "webp": "image/webp",
+    "gif": "image/gif",
+    "heic": "image/heic",
+    "bmp": "image/bmp",
+    "tiff": "image/tiff",
+    "mp4": "video/mp4",
+    "mov": "video/quicktime",
+    "avi": "video/x-msvideo",
+    "mkv": "video/x-matroska",
+    "webm": "video/webm",
+    "zip": "application/zip",
+    "rar": "application/vnd.rar",
+    "7z": "application/x-7z-compressed",
+    "dwg": "image/vnd.dwg",
+    "dxf": "image/vnd.dxf",
+}
+
+
+def guess_mime_type(filename: str) -> str:
+    """The MIME type for a filename, defaulting to a safe binary type.
+
+    The client needs this because Cloudinary serves raw assets as
+    ``application/octet-stream`` - it records no format for them - so a viewer
+    that sniffs the response header cannot tell a PDF from a spreadsheet.
+    """
+    extension = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+    return _MIME_BY_EXTENSION.get(extension, "application/octet-stream")
+
+
 class FileQuerySet(SoftDeleteQuerySet):
     def in_folder(self, folder):
         return self.filter(folder=folder)

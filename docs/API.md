@@ -912,13 +912,28 @@ GET /api/v1/documents/<id>/download/
 
 ```json
 {
-  "url": "https://res.cloudinary.com/<your-cloud-name>/raw/authenticated/s--SIGNATURE--/fl_attachment:brochure.pdf/v1/sarah-aqua-soft/5c58.../6ec4...",
+  "url": "https://api.cloudinary.com/v1_1/<cloud>/raw/download?...&signature=...",
+  "file_name": "quotation.pdf",
+  "name": "quotation.pdf",
+  "extension": "pdf",
+  "mime_type": "application/pdf",
+  "size_bytes": 548501,
+  "thumbnail_url": "",
   "expires_in_seconds": 900,
-  "name": "brochure.pdf",
-  "size_bytes": 909,
-  "mime_type": "application/pdf"
+  "is_previewable": true
 }
 ```
+
+`/preview/` returns **the same fields** - only the URL differs - so one parser
+handles both.
+
+**Use `mime_type` from this payload, not the response Content-Type.** Cloudinary
+serves raw assets (PDF, Word, Excel) as `application/octet-stream` because it
+records no format for them. The filename is not in the URL either - the URL
+carries an opaque id - so `file_name` and `extension` are the source of truth.
+
+`url` is ready to fetch as-is. If you see `s--AbC123--` in an image URL, that is
+Cloudinary's signature, not a masked value.
 
 Fetch that URL directly — it comes from a CDN, not this server, so it is fast
 and does not tie up the API.

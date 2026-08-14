@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import mimetypes
 from dataclasses import asdict
 from datetime import timedelta
 from typing import Any, BinaryIO
@@ -21,7 +20,12 @@ from apps.core.exceptions import (
     ValidationFailed,
 )
 from apps.core.validators import validate_node_name, validate_tags, validate_upload
-from apps.files.models import FileAsset, ShareLink, category_for_extension
+from apps.files.models import (
+    FileAsset,
+    ShareLink,
+    category_for_extension,
+    guess_mime_type,
+)
 from apps.files.repositories import (
     FileFavoriteRepository,
     FileRepository,
@@ -130,7 +134,7 @@ class FileService:
             name=self._unique_name(folder, safe_name),
             description=description.strip(),
             extension=extension,
-            mime_type=content_type or mimetypes.guess_type(safe_name)[0] or "",
+            mime_type=guess_mime_type(safe_name) or content_type or "",
             category=category_for_extension(extension),
             size_bytes=stored.size_bytes or size_bytes,
             public_id=stored.public_id,
@@ -203,7 +207,7 @@ class FileService:
             folder=folder,
             name=self._unique_name(folder, safe_name),
             extension=extension,
-            mime_type=content_type or mimetypes.guess_type(safe_name)[0] or "",
+            mime_type=guess_mime_type(safe_name) or content_type or "",
             category=category_for_extension(extension),
             size_bytes=size_bytes,
             public_id=public_id,
@@ -422,6 +426,31 @@ class FileService:
         logger.warning("file_purged", extra={"file_id": str(file.pk), "actor_id": str(actor.pk)})
 
     # -- delivery ---------------------------------------------------------
+    def _delivery_payload(self, file: FileAsset, url: str) -> dict[str, Any]:
+        """The response body shared by preview and download.
+
+        Both carry the full identity of the file, because the client must never
+        have to infer it from the URL. The signed URL contains an opaque
+        public_id with no filename in it, and for raw files Cloudinary's
+        download endpoint answers ``Content-Type: application/octet-stream``
+        regardless of what the file is - it has no format recorded for raw
+        assets. So the type has to come from here, where it is known.
+        """
+        return {
+            "url": url,
+            "file_name": file.name,
+            # Kept alongside file_name so an existing client reading `name`
+            # does not break on this change.
+            "name": file.name,
+            "extension": file.extension,
+            "mime_type": file.mime_type or guess_mime_type(file.name),
+            "size_bytes": file.size_bytes,
+            "thumbnail_url": file.thumbnail_url
+            or self.storage.thumbnail_url(file.public_id, file.resource_type),
+            "expires_in_seconds": settings.CLOUDINARY["SIGNED_URL_TTL_SECONDS"],
+            "is_previewable": file.is_previewable,
+        }
+
     def download_url(
         self, actor: User, file: FileAsset, as_attachment: bool = True
     ) -> dict[str, Any]:
@@ -432,24 +461,13 @@ class FileService:
         )
         self.repo.register_download(file)
         self.repo.touch_recent(actor, file)
-        return {
-            "url": url,
-            "expires_in_seconds": settings.CLOUDINARY["SIGNED_URL_TTL_SECONDS"],
-            "name": file.name,
-            "size_bytes": file.size_bytes,
-            "mime_type": file.mime_type,
-        }
+        return self._delivery_payload(file, url)
 
     def preview_url(self, actor: User, file: FileAsset) -> dict[str, Any]:
         """Inline URL - no ``attachment`` flag, so the client renders it."""
         self.repo.touch_recent(actor, file)
-        return {
-            "url": self.storage.signed_url(file.public_id, file.resource_type),
-            "thumbnail_url": file.thumbnail_url
-            or self.storage.thumbnail_url(file.public_id, file.resource_type),
-            "expires_in_seconds": settings.CLOUDINARY["SIGNED_URL_TTL_SECONDS"],
-            "is_previewable": file.is_previewable,
-        }
+        url = self.storage.signed_url(file.public_id, file.resource_type)
+        return self._delivery_payload(file, url)
 
     # -- search index -----------------------------------------------------
     @staticmethod

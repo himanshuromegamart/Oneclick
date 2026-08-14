@@ -171,8 +171,28 @@ class ShareLinkSerializer(serializers.ModelSerializer):
 
 
 class SignedURLSerializer(serializers.Serializer):
-    url = serializers.URLField()
-    expires_in_seconds = serializers.IntegerField()
-    name = serializers.CharField(required=False)
-    size_bytes = serializers.IntegerField(required=False)
-    mime_type = serializers.CharField(required=False)
+    """Response for both `/preview/` and `/download/`.
+
+    Everything the client needs to handle the file is here, so it never has to
+    parse the URL or trust the response headers. That matters because the
+    signed URL carries an opaque id with no filename, and Cloudinary serves raw
+    assets as `application/octet-stream` whatever they actually are.
+    """
+
+    url = serializers.URLField(help_text="Ready to use as-is. Fetch it directly.")
+    file_name = serializers.CharField(help_text='Original name, e.g. "quotation.pdf".')
+    name = serializers.CharField(help_text="Same as file_name; kept for older clients.")
+    extension = serializers.CharField(help_text='Lowercase, no dot, e.g. "pdf".')
+    mime_type = serializers.CharField(
+        help_text="Use this to pick a viewer - do not read the response Content-Type."
+    )
+    size_bytes = serializers.IntegerField()
+    thumbnail_url = serializers.CharField(
+        allow_blank=True, help_text="Images and video only; empty string otherwise."
+    )
+    expires_in_seconds = serializers.IntegerField(
+        help_text="Request a fresh URL after this; do not cache it."
+    )
+    is_previewable = serializers.BooleanField(
+        help_text="True for images, video and PDFs - the types a viewer can render inline."
+    )
