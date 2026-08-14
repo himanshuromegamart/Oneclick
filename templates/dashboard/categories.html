@@ -1,0 +1,80 @@
+{% extends "dashboard/base.html" %}
+{% load dashboard_extras %}
+
+{% block title %}Categories{% endblock %}
+{% block heading %}Categories{% endblock %}
+{% block subheading %}
+  A category, a subcategory and a folder are the same thing — what makes one a
+  subcategory is simply choosing a parent.
+{% endblock %}
+
+{% block content %}
+
+<div class="card">
+  <h2>Add a category</h2>
+  <div class="card-body">
+
+    {% if form.non_field_errors %}
+      <div class="form-errors">
+        {% for error in form.non_field_errors %}<div>{{ error }}</div>{% endfor %}
+      </div>
+    {% endif %}
+
+    <form method="post" novalidate>
+      {% csrf_token %}
+
+      {% for field in form %}
+        <div class="field {% if field.errors %}has-error{% endif %}">
+          <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+          {{ field }}
+          {% if field.help_text %}<div class="help">{{ field.help_text }}</div>{% endif %}
+          {% for error in field.errors %}<div class="error">{{ error }}</div>{% endfor %}
+        </div>
+      {% endfor %}
+
+      <button type="submit" class="btn">Add category</button>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <h2>All categories · {{ tree|length }}</h2>
+  {% if tree %}
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th class="hide-xs">Inside</th>
+            <th class="nowrap">Subcategories</th>
+            <th class="nowrap">Documents</th>
+            <th class="nowrap hide-xs">Added</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for folder in tree %}
+            <tr>
+              <td>
+                <span class="depth">
+                  {% for _ in folder.depth|times %}<span class="depth-rule"></span>{% endfor %}
+                  <span class="name">{{ folder.name }}</span>
+                </span>
+              </td>
+              <td class="muted tiny hide-xs">{{ folder.parent.name|default:"Top level" }}</td>
+              <td class="muted tiny nowrap">{{ folder.child_count }}</td>
+              <td class="muted tiny nowrap">{{ folder.document_count }}</td>
+              <td class="muted tiny nowrap hide-xs">{{ folder.created_at|date:"j M Y" }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="empty">
+      <strong>No categories yet</strong>
+      Add your first one using the form above — leave “Inside” as top level.
+    </div>
+  {% endif %}
+</div>
+
+{% endblock %}

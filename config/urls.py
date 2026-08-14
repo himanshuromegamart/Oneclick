@@ -27,6 +27,7 @@ def api_root(request):
             "service": "Sarah Aqua Soft - Document Manager API",
             "versions": {"v1": "/api/v1/"},
             "documentation": "/api/docs/",
+            "dashboard": "/dashboard/",
             "admin": f"/{settings.ADMIN_URL}",
             "health": "/health/",
         }
@@ -43,6 +44,10 @@ urlpatterns = [
     # The owner's console. Path is configurable via ADMIN_URL so it can be
     # moved off the default that scanners hammer.
     path(settings.ADMIN_URL, admin.site.urls),
+    # The everyday console. Server-rendered and session-authenticated, unlike
+    # everything under /api/, which is stateless and JWT-authenticated.
+    # Django's own admin stays available for the deeper, rarer jobs.
+    path("dashboard/", include("apps.dashboard.urls")),
     path("", api_root, name="api-root"),
     path("", include("apps.core.urls")),
     path("api/v1/", include((v1_patterns, "v1"), namespace="v1")),

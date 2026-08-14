@@ -64,6 +64,7 @@ LOCAL_APPS = [
     "apps.accounts",
     "apps.folders",  # categories and subcategories
     "apps.files",  # documents, plus search and sharing
+    "apps.dashboard",  # the owner's web console
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS

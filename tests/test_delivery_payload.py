@@ -48,9 +48,9 @@ class TestPayloadShape:
         response = staff_client.get(f"/api/v1/documents/{pdf.pk}/{action}/")
 
         assert response.status_code == 200
-        assert REQUIRED <= set(response.data["data"]), (
-            f"missing: {REQUIRED - set(response.data['data'])}"
-        )
+        assert REQUIRED <= set(
+            response.data["data"]
+        ), f"missing: {REQUIRED - set(response.data['data'])}"
 
     def test_preview_and_download_agree(self, staff_client, pdf):
         """Only the URL should differ, so the client can share one parser."""

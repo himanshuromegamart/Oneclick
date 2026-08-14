@@ -1,0 +1,84 @@
+{% extends "dashboard/base.html" %}
+
+{% block title %}Users{% endblock %}
+{% block heading %}Users{% endblock %}
+{% block subheading %}Create accounts and set their passwords.{% endblock %}
+
+{% block content %}
+
+<div class="card">
+  <h2>Add a user</h2>
+  <div class="card-body">
+
+    {% if form.non_field_errors %}
+      <div class="form-errors">
+        {% for error in form.non_field_errors %}<div>{{ error }}</div>{% endfor %}
+      </div>
+    {% endif %}
+
+    <form method="post" novalidate>
+      {% csrf_token %}
+
+      {% for field in form %}
+        <div class="field {% if field.errors %}has-error{% endif %}">
+          <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+          {{ field }}
+          {% if field.help_text %}<div class="help">{{ field.help_text }}</div>{% endif %}
+          {% for error in field.errors %}<div class="error">{{ error }}</div>{% endfor %}
+        </div>
+      {% endfor %}
+
+      <div class="notice notice-info">
+        Every account created here is an <strong>Owner</strong> with full access.
+        They sign in with their mobile number and this password.
+      </div>
+
+      <button type="submit" class="btn">Create user</button>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <h2>All users · {{ users|length }}</h2>
+  {% if users %}
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th class="nowrap">Mobile</th>
+            <th>Role</th>
+            <th class="hide-xs">Status</th>
+            <th class="nowrap hide-xs">Last signed in</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for person in users %}
+            <tr>
+              <td class="name">{{ person.full_name }}</td>
+              <td class="muted tiny nowrap">{{ person.phone_number }}</td>
+              <td><span class="pill pill-owner">{{ person.get_role_display }}</span></td>
+              <td class="hide-xs">
+                {% if person.is_active %}
+                  <span class="pill pill-on">Active</span>
+                {% else %}
+                  <span class="pill pill-off">Disabled</span>
+                {% endif %}
+              </td>
+              <td class="muted tiny nowrap hide-xs">
+                {{ person.last_login_at|date:"j M Y, g:i a"|default:"Never" }}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="empty">
+      <strong>No users yet</strong>
+      Add the first one using the form above.
+    </div>
+  {% endif %}
+</div>
+
+{% endblock %}

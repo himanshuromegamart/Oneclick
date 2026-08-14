@@ -1,0 +1,82 @@
+{% extends "dashboard/base.html" %}
+
+{% block title %}Overview{% endblock %}
+{% block heading %}Overview{% endblock %}
+{% block subheading %}Everything in the system at a glance.{% endblock %}
+
+{% block content %}
+
+<div class="stats">
+  <div class="stat"><div class="n">{{ stats.categories }}</div><div class="l">Categories</div></div>
+  <div class="stat"><div class="n">{{ stats.top_level }}</div><div class="l">Top level</div></div>
+  <div class="stat"><div class="n">{{ stats.documents }}</div><div class="l">Documents</div></div>
+  <div class="stat"><div class="n">{{ stats.users }}</div><div class="l">Users</div></div>
+</div>
+
+<div class="card">
+  <h2>Recently added categories</h2>
+  {% if recent_categories %}
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th class="hide-xs">Inside</th>
+            <th class="hide-xs">Added by</th>
+            <th class="nowrap">When</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for folder in recent_categories %}
+            <tr>
+              <td class="name">{{ folder.name }}</td>
+              <td class="muted hide-xs">{{ folder.parent.name|default:"Top level" }}</td>
+              <td class="muted tiny hide-xs">{{ folder.created_by.full_name|default:"—" }}</td>
+              <td class="muted tiny nowrap">{{ folder.created_at|date:"j M, g:i a" }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="empty">
+      <strong>No categories yet</strong>
+      Add your first one from the Categories page.
+    </div>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h2>Recently uploaded documents</h2>
+  {% if recent_files %}
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>File</th>
+            <th class="hide-xs">Category</th>
+            <th class="nowrap">Size</th>
+            <th class="nowrap hide-xs">When</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for file in recent_files %}
+            <tr>
+              <td class="name">{{ file.name }}</td>
+              <td class="muted hide-xs">{{ file.folder.name }}</td>
+              <td class="muted tiny nowrap">{{ file.size_display }}</td>
+              <td class="muted tiny nowrap hide-xs">{{ file.created_at|date:"j M, g:i a" }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="empty">
+      <strong>No documents yet</strong>
+      Documents are uploaded from the mobile app.
+    </div>
+  {% endif %}
+</div>
+
+{% endblock %}

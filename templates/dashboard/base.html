@@ -1,0 +1,91 @@
+{% load static %}<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>{% block title %}Dashboard{% endblock %} · Sarah Aqua Soft</title>
+  <link rel="stylesheet" href="{% static 'dashboard/style.css' %}">
+</head>
+<body>
+<div class="shell">
+
+  {# Desktop: a fixed sidebar. #}
+  <aside class="sidebar">
+    <div class="brand">
+      <strong>Sarah Aqua Soft</strong>
+      <span>Document manager</span>
+    </div>
+
+    <nav class="nav">
+      <a href="{% url 'dashboard:home' %}" class="{% if active == 'home' %}is-active{% endif %}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M3 9.5 12 3l9 6.5V20a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/>
+        </svg>
+        Overview
+      </a>
+      <a href="{% url 'dashboard:categories' %}" class="{% if active == 'categories' %}is-active{% endif %}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+        </svg>
+        Categories
+      </a>
+      <a href="{% url 'dashboard:users' %}" class="{% if active == 'users' %}is-active{% endif %}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+          <circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
+        </svg>
+        Users
+      </a>
+      <a href="/api/docs/" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+          <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+        </svg>
+        API docs
+      </a>
+    </nav>
+
+    <div class="sidebar-foot">
+      <div class="who">{{ request.user.full_name }}</div>
+      <div class="num">{{ request.user.phone_number }}</div>
+      <a href="{% url 'dashboard:logout' %}">Sign out</a>
+    </div>
+  </aside>
+
+  <div class="main">
+
+    {# Mobile: a top bar plus a scrolling tab strip. #}
+    <div class="topbar">
+      <span class="t-brand">Sarah Aqua Soft</span>
+      <a class="t-out" href="{% url 'dashboard:logout' %}">Sign out</a>
+    </div>
+    <nav class="tabs">
+      <a href="{% url 'dashboard:home' %}" class="{% if active == 'home' %}is-active{% endif %}">Overview</a>
+      <a href="{% url 'dashboard:categories' %}" class="{% if active == 'categories' %}is-active{% endif %}">Categories</a>
+      <a href="{% url 'dashboard:users' %}" class="{% if active == 'users' %}is-active{% endif %}">Users</a>
+      <a href="/api/docs/" target="_blank" rel="noopener">API docs</a>
+    </nav>
+
+    <div class="inner">
+      <header class="page-head">
+        <h1>{% block heading %}{% endblock %}</h1>
+        <p>{% block subheading %}{% endblock %}</p>
+      </header>
+
+      {% if messages %}
+        {% for message in messages %}
+          <div class="notice notice-{{ message.tags|default:'info' }}">{{ message }}</div>
+        {% endfor %}
+      {% endif %}
+
+      {% block content %}{% endblock %}
+    </div>
+  </div>
+</div>
+</body>
+</html>
