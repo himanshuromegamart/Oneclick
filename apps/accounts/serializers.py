@@ -78,7 +78,10 @@ class UserSummarySerializer(serializers.ModelSerializer):
 class UserSerializer(serializers.ModelSerializer):
     role_display = serializers.CharField(source="get_role_display", read_only=True)
     # Surfaced so the app can hide buttons the server would refuse anyway.
+    # Both are constant now that the roles differ only in dashboard access; they
+    # stay in the payload because the shipped mobile app already reads them.
     can_contribute = serializers.BooleanField(read_only=True)
+    is_admin = serializers.BooleanField(read_only=True)
     is_owner = serializers.BooleanField(read_only=True)
     # Lets the app offer "Sign in with password" only when it would actually work.
     has_password = serializers.SerializerMethodField()
@@ -93,6 +96,7 @@ class UserSerializer(serializers.ModelSerializer):
             "role",
             "role_display",
             "can_contribute",
+            "is_admin",
             "is_owner",
             "has_password",
             "is_active",
@@ -159,8 +163,12 @@ class SetupCreateUserSerializer(serializers.Serializer):
     email = serializers.EmailField(required=False, allow_blank=True, default="")
     role = serializers.ChoiceField(
         choices=UserRole.choices,
-        default=UserRole.OWNER,
-        help_text="owner = full control, staff = upload and manage own files, viewer = read-only.",
+        default=UserRole.ADMIN,
+        help_text=(
+            "admin = mobile app plus the web dashboard, user = mobile app only. "
+            "Defaults to admin because this endpoint exists to create the first "
+            "account, which has to be able to reach the dashboard."
+        ),
     )
     password = PasswordField(
         required=False,

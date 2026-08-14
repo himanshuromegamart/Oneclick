@@ -15,7 +15,7 @@ from django.core.validators import RegexValidator
 from django.db import models
 from django.utils import timezone
 
-from apps.accounts.constants import CONTRIBUTOR_ROLES, Platform, UserRole
+from apps.accounts.constants import Platform, UserRole
 from apps.accounts.managers import UserManager
 from apps.core.models import TimeStampedModel, UUIDModel
 
@@ -38,8 +38,10 @@ class User(UUIDModel, TimeStampedModel, AbstractBaseUser):
     full_name = models.CharField(max_length=150)
     email = models.EmailField(blank=True, default="")
 
+    # Defaults to the lesser role, so a caller that forgets to pass one creates
+    # an account without dashboard access rather than with it.
     role = models.CharField(
-        max_length=10, choices=UserRole.choices, default=UserRole.STAFF, db_index=True
+        max_length=10, choices=UserRole.choices, default=UserRole.USER, db_index=True
     )
 
     is_active = models.BooleanField(default=True, db_index=True)
@@ -64,51 +66,71 @@ class User(UUIDModel, TimeStampedModel, AbstractBaseUser):
 
     # -- access rules -----------------------------------------------------
     @property
+    def is_admin(self) -> bool:
+        """The one thing role decides: may this person open the dashboard?
+
+        Everything inside the mobile app is open to both roles, so this flag
+        should never be used to gate app features - only the browser consoles
+        and the account management that lives in them.
+        """
+        return self.role == UserRole.ADMIN
+
+    @property
     def is_owner(self) -> bool:
-        return self.role == UserRole.OWNER
+        """Deprecated alias for :attr:`is_admin`.
+
+        Kept because the mobile app already reads ``is_owner`` off the profile
+        payload; removing it would break a shipped client to rename a word.
+        """
+        return self.is_admin
 
     # -- Django admin -----------------------------------------------------
     #
     # The admin asks the user object three questions. Answering them from the
     # `role` field means admin access needs no `is_staff`/`is_superuser`
     # columns, no PermissionsMixin, and no migration - and it can never drift
-    # out of step with the API's own rules, because there is only one source of
-    # truth for who is privileged.
+    # out of step with the dashboard's own rule, because there is only one
+    # source of truth for who is privileged.
     @property
     def is_staff(self) -> bool:
         """May open the admin site at all."""
-        return self.is_owner
+        return self.is_admin
 
     @property
     def is_superuser(self) -> bool:
-        return self.is_owner
+        return self.is_admin
 
     def has_perm(self, perm: str, obj=None) -> bool:
-        """Owners may do anything in the admin; nobody else gets in."""
-        return self.is_owner
+        """Admins may do anything in the admin site; nobody else gets in."""
+        return self.is_admin
 
     def has_perms(self, perm_list, obj=None) -> bool:
-        return self.is_owner
+        return self.is_admin
 
     def has_module_perms(self, app_label: str) -> bool:
-        return self.is_owner
+        return self.is_admin
 
     @property
     def can_contribute(self) -> bool:
-        """May create categories and upload files."""
-        return self.role in CONTRIBUTOR_ROLES
+        """May create categories and upload files - which is everybody.
+
+        Retained as a constant rather than deleted because the mobile app
+        reads it to decide whether to show its upload button.
+        """
+        return True
 
     def owns(self, obj) -> bool:
         """True when this user uploaded/created ``obj``."""
         return getattr(obj, "created_by_id", None) == self.pk
 
     def can_modify(self, obj) -> bool:
-        """Owner may change anything; everyone else only their own items.
+        """Anyone signed in may change anything.
 
-        This is the rule behind "a user can see and delete their own
-        documents".
+        There is no "only your own files" rule: the roles differ by dashboard
+        access alone. Kept as a method so restoring an ownership rule later is
+        a change here rather than at every call site.
         """
-        return self.is_owner or (self.can_contribute and self.owns(obj))
+        return True
 
     def soft_delete(self) -> None:
         self.is_deleted = True

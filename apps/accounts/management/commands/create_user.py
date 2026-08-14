@@ -36,8 +36,8 @@ class Command(BaseCommand):
         parser.add_argument(
             "--role",
             choices=[value for value, _ in UserRole.choices],
-            default=UserRole.STAFF,
-            help="owner = full control, staff = upload and manage own files, viewer = read-only",
+            default=UserRole.USER,
+            help="admin = mobile app + web dashboard, user = mobile app only",
         )
         parser.add_argument(
             "--password",

@@ -36,30 +36,26 @@ def _isolate_state():
 
 
 @pytest.fixture
-def owner(db) -> User:
+def admin(db) -> User:
+    """An account that can open the dashboard."""
     return User.objects.create_user(
-        phone_number="9000000001", full_name="Sarah Owner", role=UserRole.OWNER
+        phone_number="9000000001", full_name="Sarah Admin", role=UserRole.ADMIN
     )
 
 
 @pytest.fixture
-def staff(db) -> User:
+def member(db) -> User:
+    """A mobile-app account. Same powers in the app; no dashboard."""
     return User.objects.create_user(
-        phone_number="9000000002", full_name="Ramesh Staff", role=UserRole.STAFF
+        phone_number="9000000002", full_name="Ramesh Kumar", role=UserRole.USER
     )
 
 
 @pytest.fixture
-def other_staff(db) -> User:
+def other_member(db) -> User:
+    """A second app account, for "can A touch B's file" tests."""
     return User.objects.create_user(
-        phone_number="9000000003", full_name="Priya Staff", role=UserRole.STAFF
-    )
-
-
-@pytest.fixture
-def viewer(db) -> User:
-    return User.objects.create_user(
-        phone_number="9000000004", full_name="Read Only", role=UserRole.VIEWER
+        phone_number="9000000003", full_name="Priya Sharma", role=UserRole.USER
     )
 
 
@@ -83,34 +79,29 @@ def _client_for(user: User):
 
 
 @pytest.fixture
-def owner_client(owner):
-    return _client_for(owner)
+def admin_client(admin):
+    return _client_for(admin)
 
 
 @pytest.fixture
-def staff_client(staff):
-    return _client_for(staff)
+def member_client(member):
+    return _client_for(member)
 
 
 @pytest.fixture
-def viewer_client(viewer):
-    return _client_for(viewer)
-
-
-@pytest.fixture
-def root_folder(db, owner):
-    """A top-level category, as an owner would create it."""
+def root_folder(db, admin):
+    """A top-level category."""
     from apps.folders.repositories import FolderRepository
 
-    return FolderRepository().create_folder(name="Quotation", parent=None, created_by=owner)
+    return FolderRepository().create_folder(name="Quotation", parent=None, created_by=admin)
 
 
 @pytest.fixture
-def child_folder(root_folder, owner):
+def child_folder(root_folder, admin):
     """A subcategory inside it."""
     from apps.folders.repositories import FolderRepository
 
-    return FolderRepository().create_folder(name="Water ATM", parent=root_folder, created_by=owner)
+    return FolderRepository().create_folder(name="Water ATM", parent=root_folder, created_by=admin)
 
 
 @pytest.fixture
@@ -121,9 +112,10 @@ def file_service():
 
 
 @pytest.fixture
-def sample_file(child_folder, staff, file_service):
+def sample_file(child_folder, member, file_service):
+    """Uploaded by `member`, so tests can check what `admin` may do to it."""
     return file_service.upload(
-        staff,
+        member,
         folder_id=child_folder.pk,
         file_obj=io.BytesIO(b"%PDF-1.4 sample specification"),
         filename="spec-500-lph.pdf",

@@ -24,7 +24,7 @@ LOGIN_URL = "/api/v1/auth/login/"
 @pytest.fixture
 def password_user(db):
     user = User.objects.create_user(
-        phone_number="9800000001", full_name="Password User", role="owner"
+        phone_number="9800000001", full_name="Password User", role="admin"
     )
     user.set_password(PASSWORD)
     user.save(update_fields=["password"])
@@ -193,7 +193,7 @@ class TestSetupEndpointWithPassword:
                 "setup_key": "a-long-enough-setup-key",
                 "phone_number": "9800000006",
                 "full_name": "New Owner",
-                "role": "owner",
+                "role": "admin",
                 "password": PASSWORD,
             },
             format="json",
@@ -325,7 +325,7 @@ class TestManagementCommand:
             "--name",
             "CLI User",
             "--role",
-            "owner",
+            "admin",
             "--password",
             PASSWORD,
         )

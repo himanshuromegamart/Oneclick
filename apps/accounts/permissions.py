@@ -1,7 +1,12 @@
 """Access rules.
 
-Three classes cover the whole product.  The rules they encode are the table in
-:mod:`apps.accounts.constants`.
+One class, because the API has one rule: be signed in and not disabled.
+
+The role split lives entirely in the browser consoles - see
+:mod:`apps.accounts.constants` - so there is deliberately nothing here that
+looks at it. The earlier ``CanContribute`` and ``IsOwnerOrCreator`` classes are
+gone rather than left returning True: a permission class that always passes is
+a trap for whoever reads the view next and assumes it still guards something.
 """
 
 from __future__ import annotations
@@ -10,8 +15,6 @@ from typing import Any
 
 from rest_framework.permissions import BasePermission
 from rest_framework.request import Request
-
-SAFE_METHODS = ("GET", "HEAD", "OPTIONS")
 
 
 class IsActiveUser(BasePermission):
@@ -28,42 +31,15 @@ class IsActiveUser(BasePermission):
         return bool(user and user.is_authenticated and user.is_active)
 
 
-class CanContribute(IsActiveUser):
-    """Read for everyone signed in; writes for Owner and Staff.
+class IsAdminRole(IsActiveUser):
+    """Admin-only. Not used by the mobile API, which is open to both roles.
 
-    Viewers get a read-only app: they can browse, search and download, but
-    every mutating verb is refused.
+    It exists for the account-management endpoints, where the rule has to hold
+    on the server: without it a User could create themselves an Admin account
+    and the dashboard restriction would mean nothing.
     """
 
-    message = "Your account has view-only access."
+    message = "This action is restricted to admins."
 
     def has_permission(self, request: Request, view: Any) -> bool:
-        if not super().has_permission(request, view):
-            return False
-        if request.method in SAFE_METHODS:
-            return True
-        return request.user.can_contribute
-
-
-class IsOwnerOrCreator(CanContribute):
-    """Object-level rule: the Owner may change anything, others only their own.
-
-    This is what lets staff manage the documents they uploaded without being
-    able to touch anyone else's.
-    """
-
-    message = "You can only modify items you added yourself."
-
-    def has_object_permission(self, request: Request, view: Any, obj: Any) -> bool:
-        if request.method in SAFE_METHODS:
-            return True
-        return request.user.can_modify(obj)
-
-
-class IsOwnerRole(IsActiveUser):
-    """Restricted to the Owner: deleting other people's items, purging, users."""
-
-    message = "This action is restricted to the account owner."
-
-    def has_permission(self, request: Request, view: Any) -> bool:
-        return super().has_permission(request, view) and request.user.is_owner
+        return super().has_permission(request, view) and request.user.is_admin

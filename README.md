@@ -1,11 +1,13 @@
 # Sarah Aqua Soft — Document Manager (Backend)
 
 A backend API for a mobile app that keeps company documents organised in
-categories, like folders on a computer. Staff log in with a mobile number and
-an OTP, add categories, upload documents, and share them with customers by
-link.
+categories, like folders on a computer. People log in with a mobile number and
+a password (or an OTP), add categories, upload documents, and share them with
+customers by link.
 
-Backend only. No website, no admin screen — the phone app is the interface.
+The phone app is the main interface. There are also two browser consoles for
+running the place — a dashboard at `/dashboard/` and the Django admin at
+`/admin/` — and only Admin accounts can open either.
 
 ---
 
@@ -13,8 +15,8 @@ Backend only. No website, no admin screen — the phone app is the interface.
 
 **Categories, subcategories and folders are all the same thing** — a box that
 holds other boxes and files, exactly like folders on a computer. What you call
-it just depends on where it sits. Staff create them from the app; nothing is
-fixed in code.
+it just depends on where it sits. Anyone signed in creates them from the app;
+nothing is fixed in code.
 
 ```
 Quotation
@@ -57,22 +59,25 @@ any time.
 
 ## Who can do what
 
-Three roles. That's the whole permission system.
+Two roles, and **one** difference between them.
 
-| | Owner | Staff | Viewer |
-|---|:---:|:---:|:---:|
-| Browse categories, view and download | ✅ | ✅ | ✅ |
-| Search | ✅ | ✅ | ✅ |
-| Add / rename a category | ✅ | ✅ | — |
-| Upload a file | ✅ | ✅ | — |
-| Rename or delete **their own** files | ✅ | ✅ | — |
-| Delete **anyone's** files or categories | ✅ | — | — |
-| Share a file | ✅ | ✅ | — |
-| Restore from the recycle bin | ✅ | own items | — |
-| Delete permanently | ✅ | — | — |
+| | Admin | User |
+|---|:---:|:---:|
+| Everything in the mobile app — browse, search, upload, share, rename, delete, restore, delete permanently | ✅ | ✅ |
+| The web dashboard at `/dashboard/` | ✅ | — |
+| The Django admin console at `/admin/` | ✅ | — |
 
-"Their own" means the person who uploaded it. Staff manage what they added; the
-Owner manages everything.
+That is the entire permission system. Inside the app the two roles are
+identical — there is no "only your own files" rule, so anyone can delete or
+rename anything, including documents somebody else uploaded.
+
+Account creation is the one thing kept to Admins. It lives only in the two
+browser consoles, both of which a User cannot open. Without that, a User could
+create themselves an Admin account and the restriction would mean nothing.
+
+> **The last admin is protected.** The console refuses to demote, disable or
+> delete the only remaining active Admin — there is no shell on the host to
+> undo it with. Promote somebody else first.
 
 ---
 
@@ -118,7 +123,7 @@ OTP is printed in the terminal and no SMS credits are spent. Switch to
 ```bash
 python manage.py migrate
 
-python manage.py create_user --phone 9876543210 --name "Your Name" --role owner
+python manage.py create_user --phone 9876543210 --name "Your Name" --role admin
 ```
 
 ### 5. Run it
@@ -136,9 +141,13 @@ Open <http://localhost:8000/api/docs/> for the interactive API documentation.
 `https://<your-service>/admin/` — a web UI for managing everything without
 needing a shell.
 
-**Only the Owner can get in.** Admin access is the `role` field, not a separate
-staff flag, so it can never drift out of step with the API's own rules. Staff
-and Viewer accounts are bounced back to the login screen.
+**Only an Admin can get in.** Console access is the `role` field, not a separate
+staff flag, so the two can never drift apart. A User account is bounced back to
+the login screen — with the same message a wrong password gets, so the form
+cannot be used to work out which numbers are admins.
+
+The check runs on every request, not just at sign-in, so demoting somebody takes
+effect on their next click rather than whenever their session expires.
 
 **You need a password to sign in** — the admin has no OTP form. Set one when
 creating the account, or via `POST /api/v1/auth/change-password/`.
@@ -176,14 +185,14 @@ the app or the API.
 Besides the admin console, accounts can be created from the server:
 
 ```bash
-# Add someone who can upload and manage their own files
-python manage.py create_user --phone 9812345678 --name "Ramesh" --role staff
+# Add someone for the mobile app (the default)
+python manage.py create_user --phone 9812345678 --name "Ramesh" --role user
 
-# Add someone who can only look and download
-python manage.py create_user --phone 9811111111 --name "Suresh" --role viewer
+# Add someone who can also open the dashboard
+python manage.py create_user --phone 9811111111 --name "Suresh" --role admin
 
 # Change an existing person's role
-python manage.py create_user --phone 9812345678 --role viewer --update
+python manage.py create_user --phone 9812345678 --role admin --update
 
 # Switch an account off (they keep their files; they just cannot log in)
 python manage.py create_user --phone 9812345678 --disable
@@ -260,7 +269,7 @@ needs (`pg_trgm`, `unaccent`). Nothing to run by hand.
 **If you have shell access** (Render Shell tab, on a paid instance):
 
 ```bash
-python manage.py create_user --phone 9876543210 --name "Your Name" --role owner
+python manage.py create_user --phone 9876543210 --name "Your Name" --role admin
 ```
 
 **If you don't** (the free plan puts Shell behind an upgrade), use the setup
@@ -278,7 +287,7 @@ endpoint instead:
      "setup_key": "<the SETUP_KEY you set>",
      "phone_number": "9876543210",
      "full_name": "Your Name",
-     "role": "owner",
+     "role": "admin",
      "password": "a-password-you-will-remember"
    }
    ```
@@ -289,7 +298,7 @@ endpoint instead:
    off and returns 404 again.
 
 That last step matters. While `SETUP_KEY` is set, anyone who learns it can
-create themselves an owner account — the endpoint deliberately bypasses the
+create themselves an admin account — the endpoint deliberately bypasses the
 "accounts are created by an administrator" rule, which is the whole reason it
 is disabled unless you explicitly turn it on.
 
@@ -315,7 +324,7 @@ that one does check Postgres.
 ### Things to know about the free plan
 
 - **The service sleeps after 15 minutes idle.** The next request takes 30–60
-  seconds to wake it. Fine for internal use; if the owner finds it annoying,
+  seconds to wake it. Fine for internal use; if that becomes annoying,
   the paid instance removes it.
 - **No Redis.** The app detects that and falls back to an in-process cache, so
   everything still works — the folder tree is just recomputed instead of
@@ -422,8 +431,9 @@ keeps only the details (name, size, who uploaded it, which category). Downloads
 use a link that expires after 15 minutes, so a link copied out of the app stops
 working — sharing stays deliberate.
 
-**Deleting is reversible.** Everything goes to a recycle bin first. Only the
-Owner can destroy something permanently.
+**Deleting is reversible.** Everything goes to a recycle bin first, and anyone
+signed in can restore it. Permanent deletion is the one action with no undo,
+and it is open to both roles — so treat it as a real button, not a safe one.
 
 **Switching an account off is immediate.** The person is locked out on their
 next action, even if they were already logged in.

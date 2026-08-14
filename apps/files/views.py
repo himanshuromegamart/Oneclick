@@ -11,7 +11,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.accounts.permissions import CanContribute, IsActiveUser
+from apps.accounts.permissions import IsActiveUser
 from apps.core.exceptions import PermissionDeniedError
 from apps.core.pagination import CursorPageNumberPagination
 from apps.core.responses import created, ok
@@ -48,7 +48,7 @@ from apps.files.services import FileFavoriteService, FileService, ShareService
 class FileViewSet(viewsets.ViewSet):
     """``/api/v1/documents/``"""
 
-    permission_classes = (IsActiveUser, CanContribute)
+    permission_classes = (IsActiveUser,)
     parser_classes = (JSONParser, MultiPartParser, FormParser)
 
     def __init__(self, **kwargs) -> None:
@@ -160,16 +160,13 @@ class FileViewSet(viewsets.ViewSet):
         responses={200: FileSerializer(many=True)},
         summary="Recycle bin",
         description=(
-            "Deleted files awaiting permanent removal. The owner sees "
-            "everything; anyone else sees only what they deleted themselves."
+            "Deleted files awaiting permanent removal. Shared: every signed-in "
+            "user sees the same bin and can restore from it."
         ),
     )
     @action(detail=False, methods=["get"])
     def deleted(self, request: Request) -> Response:
         queryset = self.repo.deleted_items()
-        if not request.user.is_owner:
-            queryset = queryset.filter(created_by=request.user)
-
         paginator = CursorPageNumberPagination()
         page = paginator.paginate_queryset(queryset, request, view=self)
         return paginator.get_paginated_response(
@@ -452,7 +449,7 @@ class FileViewSet(viewsets.ViewSet):
 class ShareLinkViewSet(viewsets.ViewSet):
     """``/api/v1/share-links/`` - manage the links you have created."""
 
-    permission_classes = (IsActiveUser, CanContribute)
+    permission_classes = (IsActiveUser,)
 
     @extend_schema(
         tags=["files"], responses={200: ShareLinkSerializer(many=True)}, summary="Your share links"

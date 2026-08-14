@@ -38,47 +38,47 @@ def upload(service, user, folder, name, content=b"%PDF-1.4 data here"):
 
 
 @pytest.fixture
-def pdf(file_service, staff, child_folder):
-    return upload(file_service, staff, child_folder, "quotation.pdf")
+def pdf(file_service, member, child_folder):
+    return upload(file_service, member, child_folder, "quotation.pdf")
 
 
 class TestPayloadShape:
     @pytest.mark.parametrize("action", ["preview", "download"])
-    def test_every_field_is_present(self, staff_client, pdf, action):
-        response = staff_client.get(f"/api/v1/documents/{pdf.pk}/{action}/")
+    def test_every_field_is_present(self, member_client, pdf, action):
+        response = member_client.get(f"/api/v1/documents/{pdf.pk}/{action}/")
 
         assert response.status_code == 200
         assert REQUIRED <= set(
             response.data["data"]
         ), f"missing: {REQUIRED - set(response.data['data'])}"
 
-    def test_preview_and_download_agree(self, staff_client, pdf):
+    def test_preview_and_download_agree(self, member_client, pdf):
         """Only the URL should differ, so the client can share one parser."""
-        preview = staff_client.get(f"/api/v1/documents/{pdf.pk}/preview/").data["data"]
-        download = staff_client.get(f"/api/v1/documents/{pdf.pk}/download/").data["data"]
+        preview = member_client.get(f"/api/v1/documents/{pdf.pk}/preview/").data["data"]
+        download = member_client.get(f"/api/v1/documents/{pdf.pk}/download/").data["data"]
 
         for field in REQUIRED - {"url"}:
             assert preview[field] == download[field], field
 
 
 class TestFileIdentity:
-    def test_the_original_filename_comes_back(self, staff_client, pdf):
-        data = staff_client.get(f"/api/v1/documents/{pdf.pk}/preview/").data["data"]
+    def test_the_original_filename_comes_back(self, member_client, pdf):
+        data = member_client.get(f"/api/v1/documents/{pdf.pk}/preview/").data["data"]
 
         assert data["file_name"] == "quotation.pdf"
         assert data["name"] == "quotation.pdf"
         assert data["extension"] == "pdf"
 
-    def test_the_client_never_has_to_parse_the_url(self, staff_client, pdf):
+    def test_the_client_never_has_to_parse_the_url(self, member_client, pdf):
         """The filename is deliberately absent from the signed URL."""
-        data = staff_client.get(f"/api/v1/documents/{pdf.pk}/preview/").data["data"]
+        data = member_client.get(f"/api/v1/documents/{pdf.pk}/preview/").data["data"]
 
         assert "quotation" not in data["url"]
         assert data["file_name"] == "quotation.pdf"
 
-    def test_the_url_is_not_masked(self, staff_client, pdf):
+    def test_the_url_is_not_masked(self, member_client, pdf):
         """It must be usable as-is - redaction belongs in logs, not responses."""
-        data = staff_client.get(f"/api/v1/documents/{pdf.pk}/preview/").data["data"]
+        data = member_client.get(f"/api/v1/documents/{pdf.pk}/preview/").data["data"]
 
         assert "*" not in data["url"]
         assert "redacted" not in data["url"].lower()
@@ -98,11 +98,11 @@ class TestFileIdentity:
         ],
     )
     def test_mime_type_is_correct_per_extension(
-        self, staff_client, file_service, staff, child_folder, filename, mime
+        self, member_client, file_service, member, child_folder, filename, mime
     ):
-        file = upload(file_service, staff, child_folder, filename)
+        file = upload(file_service, member, child_folder, filename)
 
-        data = staff_client.get(f"/api/v1/documents/{file.pk}/preview/").data["data"]
+        data = member_client.get(f"/api/v1/documents/{file.pk}/preview/").data["data"]
         assert data["mime_type"] == mime
 
     def test_mime_type_does_not_depend_on_the_host(self):
@@ -131,33 +131,33 @@ class TestPreviewability:
         ],
     )
     def test_is_previewable_matches_what_a_viewer_can_render(
-        self, staff_client, file_service, staff, child_folder, filename, previewable
+        self, member_client, file_service, member, child_folder, filename, previewable
     ):
-        file = upload(file_service, staff, child_folder, filename)
+        file = upload(file_service, member, child_folder, filename)
 
-        data = staff_client.get(f"/api/v1/documents/{file.pk}/preview/").data["data"]
+        data = member_client.get(f"/api/v1/documents/{file.pk}/preview/").data["data"]
         assert data["is_previewable"] is previewable
 
 
 class TestThumbnails:
-    def test_a_pdf_has_no_thumbnail_but_the_field_still_exists(self, staff_client, pdf):
+    def test_a_pdf_has_no_thumbnail_but_the_field_still_exists(self, member_client, pdf):
         """An absent key would make the client branch on presence; an empty
         string lets it branch on truthiness."""
-        data = staff_client.get(f"/api/v1/documents/{pdf.pk}/preview/").data["data"]
+        data = member_client.get(f"/api/v1/documents/{pdf.pk}/preview/").data["data"]
 
         assert data["thumbnail_url"] == ""
 
 
 class TestExpiry:
-    def test_expiry_is_reported(self, staff_client, pdf, settings):
-        data = staff_client.get(f"/api/v1/documents/{pdf.pk}/preview/").data["data"]
+    def test_expiry_is_reported(self, member_client, pdf, settings):
+        data = member_client.get(f"/api/v1/documents/{pdf.pk}/preview/").data["data"]
 
         assert data["expires_in_seconds"] == settings.CLOUDINARY["SIGNED_URL_TTL_SECONDS"]
 
-    def test_each_call_mints_a_fresh_url(self, staff_client, pdf):
+    def test_each_call_mints_a_fresh_url(self, member_client, pdf):
         """The client is told to re-request rather than cache, so repeated
         calls must actually produce new URLs."""
-        first = staff_client.get(f"/api/v1/documents/{pdf.pk}/preview/").data["data"]["url"]
-        second = staff_client.get(f"/api/v1/documents/{pdf.pk}/preview/").data["data"]["url"]
+        first = member_client.get(f"/api/v1/documents/{pdf.pk}/preview/").data["data"]["url"]
+        second = member_client.get(f"/api/v1/documents/{pdf.pk}/preview/").data["data"]["url"]
 
         assert first and second

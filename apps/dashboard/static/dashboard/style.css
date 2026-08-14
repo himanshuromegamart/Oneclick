@@ -268,7 +268,10 @@ tbody tr:hover { background: #fafcfe; }
   font-weight: 650;
   letter-spacing: .01em;
 }
-.pill-owner { background: var(--brand-tint); color: var(--brand-dark); }
+/* Admin is the tinted one - it is the exception, and the eye should land on it
+   when scanning a list of mostly Users. */
+.pill-admin { background: var(--brand-tint); color: var(--brand-dark); }
+.pill-user  { background: #f1f5f9;         color: var(--ink-soft); }
 .pill-on    { background: var(--ok-tint);  color: var(--ok); }
 .pill-off   { background: #f1f5f9;         color: var(--ink-faint); }
 

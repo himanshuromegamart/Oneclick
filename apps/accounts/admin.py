@@ -14,6 +14,7 @@ from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.utils.html import format_html
 
+from apps.accounts.constants import UserRole
 from apps.accounts.models import Device, OTPRequest, User
 from apps.core.validators import normalize_phone_number
 
@@ -40,8 +41,37 @@ class UserAdminForm(forms.ModelForm):
         fields = ("phone_number", "full_name", "email", "role", "is_active")
 
     def clean_phone_number(self) -> str:
-        # Accept whatever the owner types; store the one canonical form.
+        # Accept whatever is typed; store the one canonical form.
         return normalize_phone_number(self.cleaned_data["phone_number"])
+
+    def clean(self) -> dict:
+        """Refuse to remove the last way in.
+
+        Only an Admin can open either console, and this deployment has no shell
+        to repair it from - so demoting or disabling the only remaining Admin
+        is unrecoverable. It is an easy click to make by accident, since the
+        person doing it is usually editing their own account.
+        """
+        cleaned = super().clean()
+
+        if self.instance.pk is None:
+            return cleaned
+
+        still_admin = cleaned.get("role") == UserRole.ADMIN and cleaned.get("is_active")
+        if still_admin:
+            return cleaned
+
+        others = (
+            User.objects.filter(role=UserRole.ADMIN, is_active=True)
+            .exclude(pk=self.instance.pk)
+            .exists()
+        )
+        if not others and self.instance.role == UserRole.ADMIN and self.instance.is_active:
+            raise forms.ValidationError(
+                "This is the only active admin. Promote somebody else first, "
+                "or nobody will be able to sign in to the dashboard again."
+            )
+        return cleaned
 
     def clean_new_password(self) -> str:
         password = self.cleaned_data.get("new_password", "")
@@ -115,11 +145,32 @@ class UserAdmin(admin.ModelAdmin):
         # Include soft-deleted users; the admin is where you go to find them.
         return User.all_objects.all()
 
+    @staticmethod
+    def _is_last_admin(user: User) -> bool:
+        if not (user.role == UserRole.ADMIN and user.is_active):
+            return False
+        return (
+            not User.objects.filter(role=UserRole.ADMIN, is_active=True)
+            .exclude(pk=user.pk)
+            .exists()
+        )
+
     def delete_model(self, request, obj: User) -> None:
         """Soft delete, so the person's uploads keep their author.
 
         A hard delete would either cascade the files away or orphan them.
         """
+        # Same trap as demoting them on the form, by a different route: a
+        # soft-deleted user is hidden from the default manager, so removing the
+        # last admin leaves nobody who can open either console.
+        if self._is_last_admin(obj):
+            messages.error(
+                request,
+                f"{obj.full_name} is the only active admin and was left alone. "
+                "Promote somebody else first.",
+            )
+            return
+
         obj.soft_delete()
         messages.info(
             request,
@@ -129,7 +180,7 @@ class UserAdmin(admin.ModelAdmin):
 
     def delete_queryset(self, request, queryset) -> None:
         for user in queryset:
-            user.soft_delete()
+            self.delete_model(request, user)
 
 
 @admin.register(Device)

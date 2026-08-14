@@ -29,8 +29,9 @@
       {% endfor %}
 
       <div class="notice notice-info">
-        Every account created here is an <strong>Owner</strong> with full access.
-        They sign in with their mobile number and this password.
+        Both roles can browse, upload, share and delete in the mobile app.
+        The only difference is that a <strong>User</strong> cannot open this
+        dashboard. Everyone signs in with their mobile number and this password.
       </div>
 
       <button type="submit" class="btn">Create user</button>
@@ -48,6 +49,7 @@
             <th>Name</th>
             <th class="nowrap">Mobile</th>
             <th>Role</th>
+            <th class="hide-xs">Dashboard</th>
             <th class="hide-xs">Status</th>
             <th class="nowrap hide-xs">Last signed in</th>
           </tr>
@@ -57,7 +59,14 @@
             <tr>
               <td class="name">{{ person.full_name }}</td>
               <td class="muted tiny nowrap">{{ person.phone_number }}</td>
-              <td><span class="pill pill-owner">{{ person.get_role_display }}</span></td>
+              <td>
+                <span class="pill {% if person.is_admin %}pill-admin{% else %}pill-user{% endif %}">
+                  {{ person.get_role_display }}
+                </span>
+              </td>
+              <td class="muted tiny hide-xs">
+                {% if person.is_admin %}Yes{% else %}Mobile app only{% endif %}
+              </td>
               <td class="hide-xs">
                 {% if person.is_active %}
                   <span class="pill pill-on">Active</span>

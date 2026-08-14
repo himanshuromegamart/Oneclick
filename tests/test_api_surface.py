@@ -63,45 +63,50 @@ class TestViewSetIntegrity:
 class TestActionRoutes:
     """Routes that a plain unit test would never exercise."""
 
-    def test_category_favorites(self, staff_client, root_folder):
+    def test_category_favorites(self, member_client, root_folder):
         assert (
-            staff_client.post(f"/api/v1/categories/{root_folder.pk}/favorite/").status_code == 200
+            member_client.post(f"/api/v1/categories/{root_folder.pk}/favorite/").status_code == 200
         )
 
-        response = staff_client.get("/api/v1/categories/favorites/")
+        response = member_client.get("/api/v1/categories/favorites/")
         assert response.status_code == 200
         assert len(response.data["data"]) == 1
 
-    def test_file_favorites(self, staff_client, sample_file):
-        assert staff_client.post(f"/api/v1/documents/{sample_file.pk}/favorite/").status_code == 200
+    def test_file_favorites(self, member_client, sample_file):
+        assert (
+            member_client.post(f"/api/v1/documents/{sample_file.pk}/favorite/").status_code == 200
+        )
 
-        response = staff_client.get("/api/v1/documents/favorites/")
+        response = member_client.get("/api/v1/documents/favorites/")
         assert response.status_code == 200
         assert len(response.data["data"]) == 1
 
-    def test_recent_files(self, staff_client, sample_file):
-        assert staff_client.get("/api/v1/documents/recent/").status_code == 200
+    def test_recent_files(self, member_client, sample_file):
+        assert member_client.get("/api/v1/documents/recent/").status_code == 200
 
-    def test_file_versions(self, staff_client, sample_file):
-        assert staff_client.get(f"/api/v1/documents/{sample_file.pk}/versions/").status_code == 200
+    def test_file_versions(self, member_client, sample_file):
+        assert member_client.get(f"/api/v1/documents/{sample_file.pk}/versions/").status_code == 200
 
-    def test_category_statistics(self, staff_client, child_folder):
+    def test_category_statistics(self, member_client, child_folder):
         assert (
-            staff_client.get(f"/api/v1/categories/{child_folder.pk}/statistics/").status_code == 200
+            member_client.get(f"/api/v1/categories/{child_folder.pk}/statistics/").status_code
+            == 200
         )
 
-    def test_category_children(self, staff_client, root_folder):
-        assert staff_client.get(f"/api/v1/categories/{root_folder.pk}/children/").status_code == 200
+    def test_category_children(self, member_client, root_folder):
+        assert (
+            member_client.get(f"/api/v1/categories/{root_folder.pk}/children/").status_code == 200
+        )
 
-    def test_share_link_lifecycle(self, staff_client, sample_file):
-        created = staff_client.post(
+    def test_share_link_lifecycle(self, member_client, sample_file):
+        created = member_client.post(
             f"/api/v1/documents/{sample_file.pk}/share/", {"expires_in_hours": 24}, format="json"
         )
         assert created.status_code == 201
         link_id = created.data["data"]["id"]
 
-        assert staff_client.get("/api/v1/share-links/").status_code == 200
-        assert staff_client.delete(f"/api/v1/share-links/{link_id}/").status_code == 200
+        assert member_client.get("/api/v1/share-links/").status_code == 200
+        assert member_client.delete(f"/api/v1/share-links/{link_id}/").status_code == 200
 
 
 class TestOperationalEndpoints:
@@ -122,26 +127,26 @@ class TestOperationalEndpoints:
 class TestResponseEnvelope:
     """Every response has the same shape, so the app writes one parser."""
 
-    def test_success_shape(self, staff_client, root_folder):
-        response = staff_client.get(f"/api/v1/categories/{root_folder.pk}/")
+    def test_success_shape(self, member_client, root_folder):
+        response = member_client.get(f"/api/v1/categories/{root_folder.pk}/")
         assert set(response.data) == {"success", "data", "error", "meta"}
         assert response.data["success"] is True
         assert response.data["error"] is None
 
-    def test_error_shape(self, staff_client):
-        response = staff_client.get(f"/api/v1/categories/{uuid.uuid4()}/")
+    def test_error_shape(self, member_client):
+        response = member_client.get(f"/api/v1/categories/{uuid.uuid4()}/")
         assert response.status_code == 404
         assert set(response.data) == {"success", "data", "error", "meta"}
         assert response.data["success"] is False
         assert set(response.data["error"]) == {"code", "message", "details", "field_errors"}
 
-    def test_paginated_shape(self, staff_client, root_folder):
-        response = staff_client.get("/api/v1/categories/")
+    def test_paginated_shape(self, member_client, root_folder):
+        response = member_client.get("/api/v1/categories/")
         assert "pagination" in response.data["meta"]
         assert "count" in response.data["meta"]["pagination"]
 
-    def test_request_id_is_echoed_back(self, staff_client, root_folder):
-        response = staff_client.get(
+    def test_request_id_is_echoed_back(self, member_client, root_folder):
+        response = member_client.get(
             f"/api/v1/categories/{root_folder.pk}/", HTTP_X_REQUEST_ID="trace-abc-123"
         )
         assert response["X-Request-Id"] == "trace-abc-123"

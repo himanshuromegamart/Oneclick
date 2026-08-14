@@ -15,7 +15,6 @@ from apps.accounts.models import User
 from apps.core.exceptions import (
     ConflictError,
     ErrorCode,
-    PermissionDeniedError,
     ResourceNotFound,
     ValidationFailed,
 )
@@ -402,14 +401,10 @@ class FileService:
     def purge(self, actor: User, file: FileAsset) -> None:
         """Permanently destroy a file and its stored bytes. Irreversible.
 
-        Restricted to the owner: unlike every other delete in the product, this
-        one cannot be undone.
+        Open to both roles, like everything else in the app. Note that this is
+        the one action with no undo, so if a restriction is ever wanted back,
+        this is the first place to put it.
         """
-        if not actor.is_owner:
-            raise PermissionDeniedError(
-                detail="Only the account owner can permanently delete files."
-            )
-
         # A copy shares the blob; only remove it when nothing else points there.
         others = FileAsset.all_objects.filter(public_id=file.public_id).exclude(pk=file.pk).exists()
         if not others:
@@ -557,8 +552,11 @@ class ShareService:
         }
 
     def revoke(self, actor: User, link: ShareLink) -> ShareLink:
-        if link.created_by_id != actor.pk and not actor.is_owner:
-            raise PermissionDeniedError(detail="You can only revoke links you created.")
+        """Anyone signed in may revoke any link.
+
+        Turning off a link that is out in the world is the safe direction, so
+        it would be perverse to make someone find its creator first.
+        """
         link.revoke()
         return link
 

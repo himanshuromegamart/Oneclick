@@ -52,12 +52,7 @@ class LoginForm(forms.Form):
 
 
 class UserForm(forms.Form):
-    """Create a user.
-
-    There is no role field. Every account created here is an Owner, by
-    decision - so the choice is made once, in code, rather than being a
-    dropdown someone can get wrong on a Friday afternoon.
-    """
+    """Create a user."""
 
     full_name = forms.CharField(
         label="Full name",
@@ -81,6 +76,21 @@ class UserForm(forms.Form):
         widget=forms.PasswordInput(
             attrs={"placeholder": "Set a password", "autocomplete": "new-password"}
         ),
+    )
+    # Spelt out in the option text rather than left to the bare word, because a
+    # closed dropdown shows only the chosen line - and "Admin" on its own does
+    # not tell you what you are handing over.
+    role = forms.ChoiceField(
+        label="Role",
+        choices=[
+            (UserRole.USER, "User - mobile app only"),
+            (UserRole.ADMIN, "Admin - mobile app and this dashboard"),
+        ],
+        # Defaults to User: dashboard access is the one thing a role decides,
+        # so the default is the account that cannot reach it. Granting admin
+        # should be a deliberate choice, not what happens when nobody looks.
+        initial=UserRole.USER,
+        help_text="Both roles can do everything in the mobile app.",
     )
 
     def clean_phone_number(self) -> str:
@@ -108,7 +118,7 @@ class UserForm(forms.Form):
             phone_number=self.cleaned_data["phone_number"],
             full_name=self.cleaned_data["full_name"],
             email=self.cleaned_data.get("email", ""),
-            role=UserRole.OWNER,
+            role=self.cleaned_data["role"],
         )
         user.set_password(self.cleaned_data["password"])
         user.save(update_fields=["password", "updated_at"])

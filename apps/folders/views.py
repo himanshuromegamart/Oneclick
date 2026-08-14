@@ -13,7 +13,7 @@ from rest_framework.decorators import action
 from rest_framework.request import Request
 from rest_framework.response import Response
 
-from apps.accounts.permissions import CanContribute, IsActiveUser
+from apps.accounts.permissions import IsActiveUser
 from apps.core.exceptions import PermissionDeniedError
 from apps.core.pagination import CursorPageNumberPagination
 from apps.core.responses import created, ok
@@ -40,7 +40,7 @@ class FolderViewSet(viewsets.ViewSet):
     only difference - so they share one endpoint and one identity.
     """
 
-    permission_classes = (IsActiveUser, CanContribute)
+    permission_classes = (IsActiveUser,)
 
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
@@ -160,10 +160,9 @@ class FolderViewSet(viewsets.ViewSet):
     )
     @action(detail=False, methods=["get"])
     def deleted(self, request: Request) -> Response:
+        # One shared recycle bin: both roles can restore anything, so hiding
+        # rows would only mean a category nobody can find to put back.
         queryset = self.repo.deleted_items()
-        if not request.user.is_owner:
-            # Everyone else only sees what they deleted themselves.
-            queryset = queryset.filter(created_by=request.user)
         paginator = CursorPageNumberPagination()
         page = paginator.paginate_queryset(queryset, request, view=self)
         return paginator.get_paginated_response(

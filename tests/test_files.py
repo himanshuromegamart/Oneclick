@@ -9,7 +9,6 @@ from django.utils import timezone
 
 from apps.core.exceptions import (
     ConflictError,
-    PermissionDeniedError,
     ResourceNotFound,
     ValidationFailed,
 )
@@ -32,25 +31,25 @@ def upload(service, user, folder, name="doc.pdf", content=b"hello world"):
 
 
 class TestUpload:
-    def test_metadata_is_recorded(self, file_service, staff, child_folder):
-        file = upload(file_service, staff, child_folder, "Price List.pdf")
+    def test_metadata_is_recorded(self, file_service, member, child_folder):
+        file = upload(file_service, member, child_folder, "Price List.pdf")
 
         assert file.name == "Price List.pdf"
         assert file.extension == "pdf"
         assert file.category == "document"
         assert file.checksum
-        assert file.created_by == staff
+        assert file.created_by == member
 
-    def test_category_counters_are_updated(self, file_service, staff, child_folder):
-        upload(file_service, staff, child_folder)
+    def test_category_counters_are_updated(self, file_service, member, child_folder):
+        upload(file_service, member, child_folder)
         child_folder.refresh_from_db()
 
         assert child_folder.file_count == 1
         assert child_folder.total_size_bytes > 0
 
-    def test_duplicate_name_is_auto_numbered(self, file_service, staff, child_folder):
-        first = upload(file_service, staff, child_folder, "report.pdf")
-        second = upload(file_service, staff, child_folder, "report.pdf")
+    def test_duplicate_name_is_auto_numbered(self, file_service, member, child_folder):
+        first = upload(file_service, member, child_folder, "report.pdf")
+        second = upload(file_service, member, child_folder, "report.pdf")
 
         # Matches what a desktop file manager does, rather than failing an
         # upload the user already waited for.
@@ -58,14 +57,14 @@ class TestUpload:
         assert second.name == "report (1).pdf"
 
     @pytest.mark.parametrize("filename", ["virus.exe", "run.bat", "shell.sh"])
-    def test_executables_are_refused(self, file_service, staff, child_folder, filename):
+    def test_executables_are_refused(self, file_service, member, child_folder, filename):
         with pytest.raises(ValidationFailed):
-            upload(file_service, staff, child_folder, filename)
+            upload(file_service, member, child_folder, filename)
 
-    def test_oversize_upload_is_refused(self, file_service, staff, child_folder, settings):
+    def test_oversize_upload_is_refused(self, file_service, member, child_folder, settings):
         settings.STORAGE_SETTINGS = {**settings.STORAGE_SETTINGS, "MAX_UPLOAD_BYTES": 10}
         with pytest.raises(ValidationFailed):
-            upload(file_service, staff, child_folder, "big.pdf", b"x" * 100)
+            upload(file_service, member, child_folder, "big.pdf", b"x" * 100)
 
     @pytest.mark.parametrize(
         "filename,expected",
@@ -78,18 +77,18 @@ class TestUpload:
         ],
     )
     def test_files_are_categorised_for_the_app_icon(
-        self, file_service, staff, child_folder, filename, expected
+        self, file_service, member, child_folder, filename, expected
     ):
-        assert upload(file_service, staff, child_folder, filename).category == expected
+        assert upload(file_service, member, child_folder, filename).category == expected
 
 
 class TestVersioning:
-    def test_new_version_keeps_the_old_one(self, file_service, staff, child_folder):
-        file = upload(file_service, staff, child_folder, "spec.pdf", b"v1 content")
+    def test_new_version_keeps_the_old_one(self, file_service, member, child_folder):
+        file = upload(file_service, member, child_folder, "spec.pdf", b"v1 content")
         original_public_id = file.public_id
 
         file = file_service.upload_new_version(
-            staff,
+            member,
             file,
             file_obj=io.BytesIO(b"v2 content updated"),
             filename="spec.pdf",
@@ -102,21 +101,21 @@ class TestVersioning:
         assert FileVersion.objects.get(file=file, version_number=1).public_id == original_public_id
         assert file.public_id != original_public_id
 
-    def test_version_must_keep_the_same_file_type(self, file_service, staff, child_folder):
-        file = upload(file_service, staff, child_folder, "spec.pdf")
+    def test_version_must_keep_the_same_file_type(self, file_service, member, child_folder):
+        file = upload(file_service, member, child_folder, "spec.pdf")
 
         with pytest.raises(ValidationFailed):
             file_service.upload_new_version(
-                staff, file, file_obj=io.BytesIO(b"img"), filename="spec.jpg", size_bytes=3
+                member, file, file_obj=io.BytesIO(b"img"), filename="spec.jpg", size_bytes=3
             )
 
-    def test_old_versions_are_pruned(self, file_service, staff, child_folder, settings):
+    def test_old_versions_are_pruned(self, file_service, member, child_folder, settings):
         settings.STORAGE_SETTINGS = {**settings.STORAGE_SETTINGS, "MAX_FILE_VERSIONS": 2}
-        file = upload(file_service, staff, child_folder, "spec.pdf")
+        file = upload(file_service, member, child_folder, "spec.pdf")
 
         for index in range(4):
             file = file_service.upload_new_version(
-                staff,
+                member,
                 file,
                 file_obj=io.BytesIO(f"v{index}".encode()),
                 filename="spec.pdf",
@@ -128,29 +127,29 @@ class TestVersioning:
 
 
 class TestRenameMoveCopy:
-    def test_rename_keeps_the_extension(self, file_service, staff, child_folder):
-        file = upload(file_service, staff, child_folder, "old.pdf")
-        assert file_service.rename(staff, file, "new-name.pdf").name == "new-name.pdf"
+    def test_rename_keeps_the_extension(self, file_service, member, child_folder):
+        file = upload(file_service, member, child_folder, "old.pdf")
+        assert file_service.rename(member, file, "new-name.pdf").name == "new-name.pdf"
 
-    def test_rename_cannot_change_the_file_type(self, file_service, staff, child_folder):
-        file = upload(file_service, staff, child_folder, "doc.pdf")
+    def test_rename_cannot_change_the_file_type(self, file_service, member, child_folder):
+        file = upload(file_service, member, child_folder, "doc.pdf")
         # The stored bytes are a PDF; the name must not claim otherwise.
-        assert file_service.rename(staff, file, "doc.exe").name.endswith(".pdf")
+        assert file_service.rename(member, file, "doc.exe").name.endswith(".pdf")
 
     def test_move_updates_both_category_counters(
-        self, file_service, staff, root_folder, child_folder
+        self, file_service, member, root_folder, child_folder
     ):
-        file = upload(file_service, staff, child_folder)
-        file_service.move(staff, file, root_folder.pk)
+        file = upload(file_service, member, child_folder)
+        file_service.move(member, file, root_folder.pk)
 
         child_folder.refresh_from_db()
         root_folder.refresh_from_db()
         assert child_folder.file_count == 0
         assert root_folder.file_count == 1
 
-    def test_copy_reuses_the_stored_object(self, file_service, staff, root_folder, child_folder):
-        file = upload(file_service, staff, child_folder)
-        copy = file_service.copy(staff, file, root_folder.pk)
+    def test_copy_reuses_the_stored_object(self, file_service, member, root_folder, child_folder):
+        file = upload(file_service, member, child_folder)
+        copy = file_service.copy(member, file, root_folder.pk)
 
         assert copy.pk != file.pk
         # Re-uploading identical bytes would double the storage bill.
@@ -158,72 +157,69 @@ class TestRenameMoveCopy:
 
 
 class TestRecycleBin:
-    def test_delete_is_reversible(self, file_service, staff, child_folder):
-        file = upload(file_service, staff, child_folder)
-        file_service.delete(staff, file)
+    def test_delete_is_reversible(self, file_service, member, child_folder):
+        file = upload(file_service, member, child_folder)
+        file_service.delete(member, file)
 
         assert not FileAsset.objects.filter(pk=file.pk).exists()
         assert FileAsset.all_objects.filter(pk=file.pk, is_deleted=True).exists()
 
-    def test_restore_brings_it_back(self, file_service, staff, child_folder):
-        file = upload(file_service, staff, child_folder)
-        file_service.delete(staff, file)
+    def test_restore_brings_it_back(self, file_service, member, child_folder):
+        file = upload(file_service, member, child_folder)
+        file_service.delete(member, file)
 
-        restored = file_service.restore(staff, FileAsset.all_objects.get(pk=file.pk))
+        restored = file_service.restore(member, FileAsset.all_objects.get(pk=file.pk))
         assert FileAsset.objects.filter(pk=restored.pk).exists()
 
     def test_restore_is_blocked_while_the_category_is_deleted(
-        self, file_service, staff, owner, child_folder
+        self, file_service, member, admin, child_folder
     ):
         from apps.folders.services import FolderService
 
-        file = upload(file_service, staff, child_folder)
-        FolderService().delete(owner, child_folder)
+        file = upload(file_service, member, child_folder)
+        FolderService().delete(admin, child_folder)
 
         with pytest.raises(ConflictError):
-            file_service.restore(staff, FileAsset.all_objects.get(pk=file.pk))
+            file_service.restore(member, FileAsset.all_objects.get(pk=file.pk))
 
-    def test_purge_is_owner_only(self, file_service, staff, owner, child_folder):
-        file = upload(file_service, staff, child_folder)
-        file_service.delete(staff, file)
-        deleted = FileAsset.all_objects.get(pk=file.pk)
+    def test_purge_is_open_to_both_roles(self, file_service, member, child_folder):
+        """No role check: the two roles differ by dashboard access only."""
+        file = upload(file_service, member, child_folder)
+        file_service.delete(member, file)
 
-        with pytest.raises(PermissionDeniedError):
-            file_service.purge(staff, deleted)
-
-        file_service.purge(owner, deleted)
+        file_service.purge(member, FileAsset.all_objects.get(pk=file.pk))
         assert not FileAsset.all_objects.filter(pk=file.pk).exists()
 
     def test_purge_keeps_bytes_a_copy_still_needs(
-        self, file_service, owner, root_folder, child_folder
+        self, file_service, admin, root_folder, child_folder
     ):
-        file = upload(file_service, owner, child_folder)
-        copy = file_service.copy(owner, file, root_folder.pk)
+        file = upload(file_service, admin, child_folder)
+        copy = file_service.copy(admin, file, root_folder.pk)
 
-        file_service.delete(owner, file)
-        file_service.purge(owner, FileAsset.all_objects.get(pk=file.pk))
+        file_service.delete(admin, file)
+        file_service.purge(admin, FileAsset.all_objects.get(pk=file.pk))
 
         # Removing the shared object would have broken the surviving copy.
         assert copy.public_id in InMemoryStorageBackend.store
 
 
 class TestSharing:
-    def test_link_resolves_to_a_download_url(self, file_service, staff, child_folder):
-        file = upload(file_service, staff, child_folder)
+    def test_link_resolves_to_a_download_url(self, file_service, member, child_folder):
+        file = upload(file_service, member, child_folder)
         share = ShareService(storage=InMemoryStorageBackend())
 
-        link = share.create_for_file(staff, file, expires_in_hours=24)
+        link = share.create_for_file(member, file, expires_in_hours=24)
         _, payload = share.resolve(link.token)
 
         assert payload["name"] == file.name
         assert payload["url"]
 
-    def test_links_never_expire_by_default(self, file_service, staff, child_folder):
+    def test_links_never_expire_by_default(self, file_service, member, child_folder):
         """Omitting an expiry means the link keeps working until it is revoked."""
-        file = upload(file_service, staff, child_folder)
+        file = upload(file_service, member, child_folder)
         share = ShareService(storage=InMemoryStorageBackend())
 
-        link = share.create_for_file(staff, file)
+        link = share.create_for_file(member, file)
 
         assert link.expires_at is None
         assert link.is_expired is False
@@ -233,14 +229,14 @@ class TestSharing:
         _, payload = share.resolve(link.token)
         assert payload["url"]
 
-    def test_a_link_with_no_expiry_survives_the_sweep(self, file_service, staff, child_folder):
+    def test_a_link_with_no_expiry_survives_the_sweep(self, file_service, member, child_folder):
         """The nightly job must not revoke links that were never given a date."""
         from apps.files.repositories import ShareLinkRepository
 
-        file = upload(file_service, staff, child_folder)
+        file = upload(file_service, member, child_folder)
         share = ShareService(storage=InMemoryStorageBackend())
-        forever = share.create_for_file(staff, file)
-        lapsing = share.create_for_file(staff, file, expires_in_hours=1)
+        forever = share.create_for_file(member, file)
+        lapsing = share.create_for_file(member, file, expires_in_hours=1)
 
         ShareLink.objects.filter(pk=lapsing.pk).update(
             expires_at=timezone.now() - timezone.timedelta(hours=2)
@@ -253,17 +249,17 @@ class TestSharing:
         assert forever.revoked_at is None
         assert lapsing.revoked_at is not None
 
-    def test_an_explicit_expiry_is_still_honoured(self, file_service, staff, child_folder):
-        file = upload(file_service, staff, child_folder)
+    def test_an_explicit_expiry_is_still_honoured(self, file_service, member, child_folder):
+        file = upload(file_service, member, child_folder)
         share = ShareService(storage=InMemoryStorageBackend())
 
-        link = share.create_for_file(staff, file, expires_in_hours=24)
+        link = share.create_for_file(member, file, expires_in_hours=24)
         assert link.expires_at is not None
 
-    def test_expired_link_is_refused(self, file_service, staff, child_folder):
-        file = upload(file_service, staff, child_folder)
+    def test_expired_link_is_refused(self, file_service, member, child_folder):
+        file = upload(file_service, member, child_folder)
         share = ShareService(storage=InMemoryStorageBackend())
-        link = share.create_for_file(staff, file)
+        link = share.create_for_file(member, file)
 
         ShareLink.objects.filter(pk=link.pk).update(
             expires_at=timezone.now() - timezone.timedelta(hours=1)
@@ -273,43 +269,43 @@ class TestSharing:
             share.resolve(link.token)
         assert exc.value.status_code == 410
 
-    def test_revoked_link_is_refused(self, file_service, staff, child_folder):
-        file = upload(file_service, staff, child_folder)
+    def test_revoked_link_is_refused(self, file_service, member, child_folder):
+        file = upload(file_service, member, child_folder)
         share = ShareService(storage=InMemoryStorageBackend())
-        link = share.create_for_file(staff, file)
+        link = share.create_for_file(member, file)
 
-        share.revoke(staff, link)
+        share.revoke(member, link)
         with pytest.raises(ValidationFailed):
             share.resolve(link.token)
 
-    def test_download_cap_is_enforced(self, file_service, staff, child_folder):
-        file = upload(file_service, staff, child_folder)
+    def test_download_cap_is_enforced(self, file_service, member, child_folder):
+        file = upload(file_service, member, child_folder)
         share = ShareService(storage=InMemoryStorageBackend())
-        link = share.create_for_file(staff, file, max_downloads=1)
+        link = share.create_for_file(member, file, max_downloads=1)
 
         share.resolve(link.token)
         with pytest.raises(ValidationFailed):
             share.resolve(link.token)
 
-    def test_token_is_hard_to_guess(self, file_service, staff, child_folder):
-        file = upload(file_service, staff, child_folder)
-        link = ShareService(storage=InMemoryStorageBackend()).create_for_file(staff, file)
+    def test_token_is_hard_to_guess(self, file_service, member, child_folder):
+        file = upload(file_service, member, child_folder)
+        link = ShareService(storage=InMemoryStorageBackend()).create_for_file(member, file)
         # The token is the only thing protecting the file.
         assert len(link.token) >= 40
 
-    def test_deleting_the_file_kills_the_link(self, file_service, staff, child_folder):
-        file = upload(file_service, staff, child_folder)
+    def test_deleting_the_file_kills_the_link(self, file_service, member, child_folder):
+        file = upload(file_service, member, child_folder)
         share = ShareService(storage=InMemoryStorageBackend())
-        link = share.create_for_file(staff, file)
+        link = share.create_for_file(member, file)
 
-        file_service.delete(staff, file)
+        file_service.delete(member, file)
         # Otherwise "delete" would not actually stop distribution.
         with pytest.raises(ResourceNotFound):
             share.resolve(link.token)
 
-    def test_public_endpoint_needs_no_login(self, api_client, file_service, staff, child_folder):
-        file = upload(file_service, staff, child_folder)
-        link = ShareService(storage=InMemoryStorageBackend()).create_for_file(staff, file)
+    def test_public_endpoint_needs_no_login(self, api_client, file_service, member, child_folder):
+        file = upload(file_service, member, child_folder)
+        link = ShareService(storage=InMemoryStorageBackend()).create_for_file(member, file)
 
         response = api_client.get(f"/api/v1/share/{link.token}/")
         assert response.status_code == 200
@@ -317,32 +313,32 @@ class TestSharing:
 
 
 class TestFavoritesAndRecent:
-    def test_favorite_toggles(self, file_service, staff, child_folder):
+    def test_favorite_toggles(self, file_service, member, child_folder):
         from apps.files.services import FileFavoriteService
 
-        file = upload(file_service, staff, child_folder)
+        file = upload(file_service, member, child_folder)
         favorites = FileFavoriteService()
 
-        assert favorites.toggle(staff, file) is True
-        assert favorites.toggle(staff, file) is False
+        assert favorites.toggle(member, file) is True
+        assert favorites.toggle(member, file) is False
 
-    def test_download_updates_recent_and_the_counter(self, file_service, staff, child_folder):
+    def test_download_updates_recent_and_the_counter(self, file_service, member, child_folder):
         from apps.files.repositories import FileRepository
 
-        file = upload(file_service, staff, child_folder)
-        file_service.download_url(staff, file)
+        file = upload(file_service, member, child_folder)
+        file_service.download_url(member, file)
 
         file.refresh_from_db()
         assert file.download_count == 1
-        assert FileRepository().recent_for(staff).count() == 1
+        assert FileRepository().recent_for(member).count() == 1
 
 
 class TestSearch:
     @pytest.fixture
-    def library(self, file_service, staff, child_folder, root_folder):
+    def library(self, file_service, member, child_folder, root_folder):
         def make(name, folder, tags=None, description=""):
             return file_service.upload(
-                staff,
+                member,
                 folder_id=folder.pk,
                 file_obj=io.BytesIO(b"content bytes here"),
                 filename=name,
@@ -400,8 +396,8 @@ class TestSearch:
         results = list(search_files("", {"folder_id": root_folder.pk}))
         assert len(results) == 3
 
-    def test_search_endpoint(self, staff_client, library):
-        response = staff_client.get("/api/v1/search/?q=Brochure")
+    def test_search_endpoint(self, member_client, library):
+        response = member_client.get("/api/v1/search/?q=Brochure")
         assert response.status_code == 200
         assert response.data["data"]
 

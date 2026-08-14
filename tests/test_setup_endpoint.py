@@ -1,6 +1,6 @@
 """The guarded account-bootstrap endpoint.
 
-This endpoint can mint an owner account over plain HTTP, so its guards are the
+This endpoint can mint an admin account over plain HTTP, so its guards are the
 only thing between a public URL and full control of the system. The negative
 tests matter more than the happy path.
 """
@@ -19,7 +19,7 @@ PAYLOAD = {
     "setup_key": "a-long-enough-setup-key",
     "phone_number": "9876500001",
     "full_name": "First Owner",
-    "role": "owner",
+    "role": "admin",
 }
 
 
@@ -61,7 +61,7 @@ class TestKeyChecking:
         response = api_client.post(URL, PAYLOAD, format="json")
 
         assert response.status_code == 201
-        assert response.data["data"]["role"] == "owner"
+        assert response.data["data"]["role"] == "admin"
         assert response.data["data"]["phone_number"] == "+919876500001"
 
         user = User.objects.get(phone_number="+919876500001")
@@ -100,7 +100,7 @@ class TestKeyChecking:
 
 class TestAccountCreation:
     def test_can_create_each_role(self, api_client, setup_key_enabled):
-        for index, role in enumerate(["owner", "staff", "viewer"], start=2):
+        for index, role in enumerate(["admin", "user", "user"], start=2):
             response = api_client.post(
                 URL,
                 {**PAYLOAD, "phone_number": f"987650000{index}", "role": role},
@@ -110,13 +110,13 @@ class TestAccountCreation:
             assert response.data["data"]["role"] == role
 
     def test_role_defaults_to_owner(self, api_client, setup_key_enabled):
-        """The first account created this way is almost always the owner."""
+        """The first account created this way is almost always the admin."""
         body = {k: v for k, v in PAYLOAD.items() if k != "role"}
 
         response = api_client.post(URL, body, format="json")
 
         assert response.status_code == 201
-        assert response.data["data"]["role"] == "owner"
+        assert response.data["data"]["role"] == "admin"
 
     def test_duplicate_number_is_refused(self, api_client, setup_key_enabled):
         api_client.post(URL, PAYLOAD, format="json")

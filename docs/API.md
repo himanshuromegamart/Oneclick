@@ -196,8 +196,8 @@ Asking for a page past the end returns `data: []` with HTTP 200, not an error.
 | `POST /auth/login/` | The account has a password set |
 | `POST /auth/otp/verify/` | Always available — a code is sent by SMS |
 
-**There is no signup.** Accounts are created on the server by the owner, or
-through the setup endpoint (section 3d).
+**There is no signup.** Accounts are created by an admin in the web dashboard,
+or through the setup endpoint (section 3d).
 
 `GET /auth/me/` returns `has_password`, so the app can offer the password form
 only when it would actually work.
@@ -230,8 +230,9 @@ Only `phone_number` and `password` are required.
       "access": "eyJ...", "refresh": "eyJ...",
       "access_expires_in": 86400, "refresh_expires_in": 2592000
     },
-    "user": { "id": "...", "full_name": "...", "role": "owner",
-              "has_password": true, "can_contribute": true, "is_owner": true },
+    "user": { "id": "...", "full_name": "...", "role": "admin",
+              "has_password": true, "can_contribute": true,
+              "is_admin": true, "is_owner": true },
     "device": null
   }
 }
@@ -342,9 +343,10 @@ Only `phone_number` and `otp` are required. The rest just populates the
       "phone_number": "+919999900003",
       "full_name": "Doc Owner",
       "email": "",
-      "role": "owner",
-      "role_display": "Owner",
+      "role": "admin",
+      "role_display": "Admin",
       "can_contribute": true,
+      "is_admin": true,
       "is_owner": true,
       "is_active": true,
       "last_login_at": "2026-08-07T16:40:19.154484+05:30",
@@ -456,7 +458,7 @@ POST /api/v1/setup/create-user/
   "setup_key": "<the SETUP_KEY set on the server>",
   "phone_number": "9876543210",
   "full_name": "Owner Name",
-  "role": "owner",
+  "role": "admin",
   "password": "optional-but-recommended"
 }
 ```
@@ -470,7 +472,7 @@ OTP-only.
 
 **Returns 404 unless `SETUP_KEY` is set** on the server, and it should be
 removed once the accounts you need exist. While it is set, anyone holding the
-key can create an owner account.
+key can create an admin account.
 
 Guards: constant-time key comparison, 10 attempts per hour per IP, keys under
 8 characters refused, every attempt logged.
@@ -479,27 +481,33 @@ Guards: constant-time key comparison, 10 attempts per hour per IP, keys under
 
 ## 4. Roles: who can do what
 
-Three roles, on the `role` field of the user.
+Two roles, on the `role` field of the user: `admin` and `user`.
 
-| Action | `owner` | `staff` | `viewer` |
-|---|:---:|:---:|:---:|
-| Browse, search, view, download | yes | yes | yes |
-| Create / rename a category | yes | yes | no |
-| Upload a document | yes | yes | no |
-| Rename / move / delete **own** items | yes | yes | no |
-| Rename / move / delete **anyone's** items | yes | no | no |
-| Share a document | yes | yes | no |
-| See the whole recycle bin | yes | own only | no |
-| Delete permanently (purge) | yes | no | no |
+**For the mobile app, there is no difference between them.** Both roles can do
+everything this document describes — browse, search, upload, rename, move,
+share, delete, restore, and delete permanently — on any item, including ones
+somebody else created.
 
-"Own" = the person who uploaded or created it (`created_by.id`).
+The only thing `role` decides is access to the two browser consoles (the
+dashboard and the Django admin), which the app has nothing to do with.
 
-**In the app:** use `can_contribute` from `/auth/me/` to hide the "+" button,
-and compare `item.created_by.id` with the current user id to decide whether to
-offer rename/delete on a row. The server enforces all of this regardless —
-hiding buttons is only so the user is not offered something that will fail.
+> **Changed from the previous version.** There used to be three roles
+> (`owner` / `staff` / `viewer`) with a "you may only touch your own files"
+> rule. Both are gone. If the app currently hides buttons based on role, or
+> compares `created_by.id` against the current user to decide whether to offer
+> rename/delete, that logic can be deleted — the server no longer refuses any
+> of it.
+>
+> Existing accounts were migrated: `owner` → `admin`, `staff` and `viewer` →
+> `user`. So the **`role` string values have changed**. Anything comparing
+> `role == "owner"` needs updating; `is_owner` still works and still means the
+> same thing (see below).
 
-Violations return `403 PERMISSION_DENIED`.
+**In the app:** you no longer need to gate anything on role. `can_contribute`
+is still in the payload and is now always `true`.
+
+`403 PERMISSION_DENIED` is still returned for a disabled account, and by the
+share-link endpoints for an expired or revoked link.
 
 ---
 
@@ -659,8 +667,7 @@ them without interpreting them, so you can add icons without a server change.
 Nesting is unlimited in practice; the hard ceiling is 32 levels.
 
 Failures: `409 FOLDER_NAME_CONFLICT` (a sibling already has that name,
-case-insensitive), `400 VALIDATION_ERROR` (illegal characters), `403
-PERMISSION_DENIED` (viewer).
+case-insensitive), `400 VALIDATION_ERROR` (illegal characters).
 
 ### All category endpoints
 
@@ -1014,7 +1021,7 @@ versions are kept, then the oldest is discarded.
 | `POST` | `/documents/<id>/share/` | Create a share link |
 | `POST` | `/documents/<id>/restore/` | Restore from the bin |
 | `DELETE` | `/documents/<id>/` | Send to the bin |
-| `DELETE` | `/documents/<id>/purge/` | Destroy permanently (owner only) |
+| `DELETE` | `/documents/<id>/purge/` | Destroy permanently (no undo) |
 
 List filters for `/documents/`: `category`, `extension`, `tag`, and `ordering`
 (`-created_at`, `name`, `-size_bytes`, `-download_count`).
@@ -1039,7 +1046,8 @@ DELETE /api/v1/documents/<id>/purge/    -> { "detail": "File permanently deleted
 ```
 
 Delete is reversible. **Purge is not** — it removes the stored file and every
-old version, and only the owner can do it. Always confirm before calling it.
+old version, and **any signed-in user can do it**, whatever their role. Always
+confirm before calling it.
 
 Items sit in the bin for 30 days, then a nightly job removes them for good.
 
@@ -1158,10 +1166,11 @@ Returns `410 SHARE_LINK_EXPIRED` once it lapses, is revoked or hits the cap, and
 | `phone_number` | string | Always `+91XXXXXXXXXX` |
 | `full_name` | string | |
 | `email` | string | May be empty |
-| `role` | enum | `owner` / `staff` / `viewer` |
-| `role_display` | string | "Owner" / "Staff" / "Viewer" — ready to display |
-| `can_contribute` | bool | Can create and upload. Hide the "+" when false |
-| `is_owner` | bool | Full control |
+| `role` | enum | `admin` / `user` |
+| `role_display` | string | "Admin" / "User" — ready to display |
+| `can_contribute` | bool | Always `true` now. Kept so old builds keep working |
+| `is_admin` | bool | Can open the web dashboard. Irrelevant to the app |
+| `is_owner` | bool | Deprecated alias of `is_admin`, same value. Prefer `is_admin` |
 | `is_active` | bool | |
 | `last_login_at` | datetime or null | |
 

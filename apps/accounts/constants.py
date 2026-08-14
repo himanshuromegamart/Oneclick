@@ -1,29 +1,38 @@
 """Roles.
 
-Deliberately simple: three roles as a single field on the user, not a
-permission table.  The whole access model fits in the table below, which means
-an owner can reason about "who can do what" without opening an admin screen.
+Two roles, one difference between them: an Admin can open the web dashboard
+and the Django admin site, and a User cannot.  Inside the mobile app they are
+identical.
 
-=================  =====  =====  ======
-Action             Owner  Staff  Viewer
-=================  =====  =====  ======
-Browse categories    Y      Y      Y
-View / download      Y      Y      Y
-Search               Y      Y      Y
-Create category      Y      Y      -
-Rename category      Y      Y      -
-Delete category      Y      -      -
-Upload file          Y      Y      -
-Rename own file      Y      Y      -
-Delete own file      Y      Y      -
-Delete any file      Y      -      -
-Share                Y      Y      -
-Restore / purge      Y      -      -
-=================  =====  =====  ======
+=========================  =====  ====
+Action                     Admin  User
+=========================  =====  ====
+Browse categories            Y      Y
+View / download              Y      Y
+Search                       Y      Y
+Create / rename category     Y      Y
+Delete category              Y      Y
+Upload file                  Y      Y
+Rename / delete any file     Y      Y
+Share                        Y      Y
+Restore / purge              Y      Y
+-------------------------  -----  ----
+Web dashboard                Y      -
+Django admin site            Y      -
+=========================  =====  ====
 
-"Own file" means the user uploaded it.  That is the rule behind "a user can see
-and delete their own documents": Staff manage what they added, and the Owner
-manages everything.
+That single line below the rule is the whole access model.  It is deliberately
+this blunt: the owner asked for exactly one restriction, so anything subtler
+would be a rule nobody remembers when it matters.
+
+Two consequences worth naming, because they are not obvious from the table:
+
+* A User can delete documents somebody else uploaded, and can purge them
+  permanently.  There is no "only your own files" rule any more.
+* Account creation is not on the table at all - it exists only in the
+  dashboard and the setup endpoint, both of which are Admin-gated.  That is
+  what stops a User from simply creating themselves an Admin account and
+  walking around the one restriction.
 """
 
 from __future__ import annotations
@@ -32,16 +41,11 @@ from django.db import models
 
 
 class UserRole(models.TextChoices):
-    OWNER = "owner", "Owner"
-    STAFF = "staff", "Staff"
-    VIEWER = "viewer", "Viewer"
+    ADMIN = "admin", "Admin"
+    USER = "user", "User"
 
 
 class Platform(models.TextChoices):
     ANDROID = "android", "Android"
     IOS = "ios", "iOS"
     UNKNOWN = "unknown", "Unknown"
-
-
-#: Roles allowed to add or rename categories and upload files.
-CONTRIBUTOR_ROLES = frozenset({UserRole.OWNER, UserRole.STAFF})

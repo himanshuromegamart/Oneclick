@@ -29,7 +29,7 @@ class UserManager(BaseUserManager):
         from apps.accounts.constants import UserRole
 
         phone = normalize_phone_number(phone_number)
-        extra.setdefault("role", UserRole.STAFF)
+        extra.setdefault("role", UserRole.USER)
 
         user = self.model(phone_number=phone, full_name=full_name.strip(), **extra)
         # OTP is the only credential. A usable password would be a second,
@@ -42,7 +42,7 @@ class UserManager(BaseUserManager):
     def create_superuser(self, phone_number: str, full_name: str = "", **extra: Any) -> User:
         from apps.accounts.constants import UserRole
 
-        extra["role"] = UserRole.OWNER
+        extra["role"] = UserRole.ADMIN
         extra.setdefault("is_active", True)
         return self.create_user(phone_number=phone_number, full_name=full_name, **extra)
 

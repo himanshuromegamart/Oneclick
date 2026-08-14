@@ -222,14 +222,14 @@ class Command(BaseCommand):
                         "No account for that number. Pass --owner-password to create one."
                     )
                 user = User.objects.create_user(
-                    phone_number=phone, full_name="Owner", role=UserRole.OWNER
+                    phone_number=phone, full_name="Owner", role=UserRole.ADMIN
                 )
                 user.set_password(options["owner_password"])
                 user.save(update_fields=["password"])
                 self.stdout.write(self.style.SUCCESS(f"Created owner {phone}."))
             return user
 
-        owner = User.objects.filter(role=UserRole.OWNER).first() or User.objects.first()
+        owner = User.objects.filter(role=UserRole.ADMIN).first() or User.objects.first()
         if owner is None:
             raise CommandError(
                 "There are no users yet. Create one first, or pass "
