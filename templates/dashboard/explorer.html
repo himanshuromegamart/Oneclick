@@ -1,0 +1,145 @@
+{% extends "dashboard/base.html" %}
+
+{% block title %}{% if here %}{{ here.name }}{% else %}Files{% endif %}{% endblock %}
+{% block heading %}{% if here %}{{ here.name }}{% else %}Files{% endif %}{% endblock %}
+{% block subheading %}
+  {% if here %}
+    {{ listing.category_count }} categor{{ listing.category_count|pluralize:"y,ies" }},
+    {{ listing.document_count }} document{{ listing.document_count|pluralize }} in here.
+  {% else %}
+    Your main categories. Open one to see what is inside and add to it.
+  {% endif %}
+{% endblock %}
+
+{% block content %}
+
+{# Where you are. Always shows "All categories" as the root, so there is a way
+   back up from any depth without the browser's back button. #}
+<nav class="crumbs" aria-label="Breadcrumb">
+  <a href="{% url 'dashboard:explorer-root' %}" {% if not here %}class="is-here"{% endif %}>
+    All categories
+  </a>
+  {% for crumb in breadcrumb %}
+    <span class="crumb-sep" aria-hidden="true">›</span>
+    {% if forloop.last %}
+      <span class="is-here">{{ crumb.name }}</span>
+    {% else %}
+      <a href="{% url 'dashboard:explorer' crumb.id %}">{{ crumb.name }}</a>
+    {% endif %}
+  {% endfor %}
+</nav>
+
+<div class="tools">
+  <details class="tool" {% if category_form.errors %}open{% endif %}>
+    <summary class="btn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M12 5v14"/><path d="M5 12h14"/>
+      </svg>
+      New category
+    </summary>
+    <div class="tool-body">
+      <form method="post" novalidate>
+        {% csrf_token %}
+        <input type="hidden" name="action" value="add_category">
+
+        {% if category_form.non_field_errors %}
+          <div class="form-errors">
+            {% for error in category_form.non_field_errors %}<div>{{ error }}</div>{% endfor %}
+          </div>
+        {% endif %}
+
+        {% for field in category_form %}
+          <div class="field {% if field.errors %}has-error{% endif %}">
+            <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+            {{ field }}
+            {% for error in field.errors %}<div class="error">{{ error }}</div>{% endfor %}
+          </div>
+        {% endfor %}
+
+        <p class="tool-note">
+          It will be added inside
+          <strong>{% if here %}{{ here.name }}{% else %}the top level{% endif %}</strong>.
+        </p>
+        <button type="submit" class="btn">Add category</button>
+      </form>
+    </div>
+  </details>
+
+  {# Documents live inside a category, so there is nothing to upload into at
+     the top level. Offering the form there would only produce an error. #}
+  {% if here %}
+    <details class="tool" {% if upload_form.errors %}open{% endif %}>
+      <summary class="btn btn-quiet">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 19V7"/><path d="M7 12l5-5 5 5"/><path d="M4 20h16"/>
+        </svg>
+        Upload documents
+      </summary>
+      <div class="tool-body">
+        <form method="post" enctype="multipart/form-data" novalidate>
+          {% csrf_token %}
+          <input type="hidden" name="action" value="upload">
+
+          {% for field in upload_form %}
+            <div class="field {% if field.errors %}has-error{% endif %}">
+              <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+              {{ field }}
+              {% if field.help_text %}<div class="help">{{ field.help_text }}</div>{% endif %}
+              {% for error in field.errors %}<div class="error">{{ error }}</div>{% endfor %}
+            </div>
+          {% endfor %}
+
+          <p class="tool-note">
+            Into <strong>{{ here.name }}</strong>.
+          </p>
+          <button type="submit" class="btn">Upload</button>
+        </form>
+      </div>
+    </details>
+  {% endif %}
+</div>
+
+<div class="card">
+  {% if listing.is_empty %}
+    <div class="empty">
+      {% if here %}
+        <strong>{{ here.name }} is empty</strong>
+        Add a category inside it, or upload your first document.
+      {% else %}
+        <strong>No categories yet</strong>
+        Add your first one — something like “Products” or “Certificates”.
+      {% endif %}
+    </div>
+  {% else %}
+    <ul class="nodes">
+      {% for node in listing.nodes %}
+        {% include "dashboard/_node.html" %}
+      {% endfor %}
+    </ul>
+
+    {% if listing.has_previous or listing.has_next %}
+      <div class="pager">
+        {% if listing.has_previous %}
+          <a class="btn btn-quiet" href="?page={{ previous_page }}">Previous</a>
+        {% else %}
+          <span></span>
+        {% endif %}
+
+        <span class="pager-at">
+          {{ listing.offset|add:1 }}–{{ listing.nodes|length|add:listing.offset }}
+          of {{ listing.total }}
+        </span>
+
+        {% if listing.has_next %}
+          <a class="btn btn-quiet" href="?page={{ next_page }}">Next</a>
+        {% else %}
+          <span></span>
+        {% endif %}
+      </div>
+    {% endif %}
+  {% endif %}
+</div>
+
+{% endblock %}

@@ -208,6 +208,27 @@ a { color: var(--brand); }
 .btn:active { transform: translateY(1px); }
 .btn-wide   { width: 100%; }
 
+.btn svg { width: 17px; height: 17px; flex: none; }
+
+.btn-quiet {
+  color: var(--ink-soft);
+  background: var(--surface);
+  border-color: #cbd5e1;
+}
+.btn-quiet:hover { background: var(--canvas); border-color: #94a3b8; color: var(--ink); }
+
+/* Visible to a screen reader, invisible on screen - the icon buttons in the
+   explorer would otherwise be unlabelled. */
+.sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  margin: -1px; padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 /* --- notices ------------------------------------------------------------- */
 
 .notice {
@@ -390,6 +411,141 @@ tbody tr:hover { background: #fafcfe; }
   color: var(--ink-faint);
 }
 
+/* --- explorer ------------------------------------------------------------ */
+
+/* Breadcrumb. Wraps rather than scrolls: a deep path on a phone should push
+   the list down a line, not hide the part you need to tap. */
+.crumbs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px 6px;
+  margin-bottom: 15px;
+  font-size: 13.5px;
+}
+.crumbs a { color: var(--brand); text-decoration: none; }
+.crumbs a:hover { text-decoration: underline; }
+.crumbs .is-here { color: var(--ink); font-weight: 600; }
+.crumb-sep { color: var(--ink-faint); }
+
+/* The two add-tools. <details> gives an open/close panel with no JavaScript,
+   so the page still works if the script never loads. */
+.tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.tool { flex: 1 1 240px; min-width: 0; }
+.tool > summary {
+  list-style: none;
+  width: 100%;
+  user-select: none;
+}
+.tool > summary::-webkit-details-marker { display: none; }
+
+.tool-body {
+  margin-top: 10px;
+  padding: 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+}
+.tool-note {
+  margin: 0 0 13px;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+.tool-note strong { color: var(--ink); }
+
+/* The listing. One row shape for categories and documents alike - the whole
+   point of the composite is that they line up. */
+.nodes { margin: 0; padding: 0; list-style: none; }
+
+.node {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px 0 0;
+  border-bottom: 1px solid var(--line);
+}
+.node:last-child { border-bottom: 0; }
+.node:hover { background: #f8fafc; }
+
+.node-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 13px 6px 13px 16px;
+  text-decoration: none;
+  color: inherit;
+}
+
+.node-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+}
+.node-icon svg { width: 19px; height: 19px; }
+.node-category .node-icon { background: var(--brand-tint); color: var(--brand); }
+.node-document .node-icon { background: #f1f5f9;           color: var(--ink-soft); }
+
+.node-text { min-width: 0; }
+.node-name {
+  display: block;
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--ink);
+  /* Long document names must not push the actions off the row. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.node-detail {
+  display: block;
+  margin-top: 2px;
+  font-size: 12.5px;
+  color: var(--ink-faint);
+}
+
+.node-go { flex: none; color: var(--ink-faint); display: grid; place-items: center; }
+.node-go svg { width: 17px; height: 17px; }
+
+.node-actions { flex: none; display: flex; align-items: center; gap: 2px; }
+.node-del { margin: 0; }
+
+.node-act {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  color: var(--ink-faint);
+  background: none;
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.node-act svg { width: 17px; height: 17px; }
+.node-act:hover { background: var(--brand-tint); color: var(--brand-dark); }
+.node-act-danger:hover { background: var(--bad-tint); color: var(--bad); }
+
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-top: 1px solid var(--line);
+}
+.pager-at { font-size: 12.5px; color: var(--ink-faint); }
+
 /* --- responsive ---------------------------------------------------------- */
 
 @media (max-width: 860px) {
@@ -411,9 +567,8 @@ tbody tr:hover { background: #fafcfe; }
   .topbar .t-brand { color: #fff; font-weight: 650; font-size: 15px; }
   .topbar .t-out   { color: #cbd5e1; text-decoration: none; font-size: 13.5px; }
 
-  /* The nav becomes a horizontal strip that scrolls - no hamburger, because
-     four items fit and a menu nobody can see is worse than a little sideways
-     scrolling. */
+  /* The nav becomes a horizontal strip that scrolls - no hamburger, because a
+     menu nobody can see is worse than a little sideways scrolling. */
   .tabs {
     display: flex;
     gap: 7px;
@@ -447,6 +602,16 @@ tbody tr:hover { background: #fafcfe; }
 
   th, td { padding: 11px 14px; }
   .card-body { padding: 16px; }
+
+  /* Each tool gets its own full-width row: two half-width buttons on a phone
+     leave neither with room for its label. */
+  .tool { flex: 1 1 100%; }
+
+  .node-main { gap: 11px; padding: 12px 4px 12px 13px; }
+  .node-icon { width: 33px; height: 33px; }
+  /* The chevron is decorative and the whole row is tappable, so it is the
+     first thing to go when width is short. */
+  .node-go { display: none; }
 }
 
 @media (max-width: 420px) {

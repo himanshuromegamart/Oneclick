@@ -1,0 +1,71 @@
+{# One row of the explorer.
+
+   Deliberately does not know whether it has a category or a document: it asks
+   the node for a name, a detail line and a URL, and those mean the right thing
+   for either. The only branch is `is_container`, because opening a category
+   navigates in place while a document opens in a new tab. #}
+
+<li class="node {% if node.is_container %}node-category{% else %}node-document{% endif %}">
+
+  <a class="node-main" href="{{ node.url }}"
+     {% if not node.is_container %}target="_blank" rel="noopener"{% endif %}>
+
+    <span class="node-icon" aria-hidden="true">
+      {% if node.is_container %}
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
+             stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+        </svg>
+      {% else %}
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
+             stroke-linecap="round" stroke-linejoin="round">
+          <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/>
+          <path d="M14 3v5h5"/>
+        </svg>
+      {% endif %}
+    </span>
+
+    <span class="node-text">
+      <span class="node-name">{{ node.name }}</span>
+      <span class="node-detail">{{ node.detail }}</span>
+    </span>
+
+    {% if node.is_container %}
+      <span class="node-go" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+      </span>
+    {% endif %}
+  </a>
+
+  <div class="node-actions">
+    {% if not node.is_container %}
+      <a class="node-act" href="{{ node.url }}?download=1" title="Download {{ node.name }}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 3v12"/><path d="M7 11l5 5 5-5"/><path d="M4 20h16"/>
+        </svg>
+        <span class="sr-only">Download</span>
+      </a>
+    {% endif %}
+
+    {# A form, not a link: deleting on GET means a crawler or a prefetch can
+       do it, and this one cascades to everything inside. #}
+    <form method="post" class="node-del"
+          onsubmit="return confirm('Move “{{ node.name|escapejs }}” to the recycle bin?{% if node.is_container %}\n\nEverything inside it goes too.{% endif %}');">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="delete">
+      <input type="hidden" name="kind" value="{{ node.kind }}">
+      <input type="hidden" name="node_id" value="{{ node.id }}">
+      <button type="submit" class="node-act node-act-danger" title="Delete {{ node.name }}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M4 7h16"/><path d="M10 11v6"/><path d="M14 11v6"/>
+          <path d="M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13"/>
+          <path d="M9 7V4h6v3"/>
+        </svg>
+        <span class="sr-only">Delete</span>
+      </button>
+    </form>
+  </div>
+</li>

@@ -25,12 +25,19 @@
         </svg>
         Overview
       </a>
-      <a href="{% url 'dashboard:categories' %}" class="{% if active == 'categories' %}is-active{% endif %}">
+      <a href="{% url 'dashboard:explorer-root' %}" class="{% if active == 'explorer' %}is-active{% endif %}">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
              stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
         </svg>
-        Categories
+        Files
+      </a>
+      <a href="{% url 'dashboard:categories' %}" class="{% if active == 'categories' %}is-active{% endif %}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M4 6h16"/><path d="M7 12h13"/><path d="M10 18h10"/>
+        </svg>
+        All categories
       </a>
       <a href="{% url 'dashboard:users' %}" class="{% if active == 'users' %}is-active{% endif %}">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -66,7 +73,8 @@
     </div>
     <nav class="tabs">
       <a href="{% url 'dashboard:home' %}" class="{% if active == 'home' %}is-active{% endif %}">Overview</a>
-      <a href="{% url 'dashboard:categories' %}" class="{% if active == 'categories' %}is-active{% endif %}">Categories</a>
+      <a href="{% url 'dashboard:explorer-root' %}" class="{% if active == 'explorer' %}is-active{% endif %}">Files</a>
+      <a href="{% url 'dashboard:categories' %}" class="{% if active == 'categories' %}is-active{% endif %}">All categories</a>
       <a href="{% url 'dashboard:users' %}" class="{% if active == 'users' %}is-active{% endif %}">Users</a>
       <a href="/api/docs/" target="_blank" rel="noopener">API docs</a>
     </nav>

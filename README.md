@@ -136,10 +136,36 @@ Open <http://localhost:8000/api/docs/> for the interactive API documentation.
 
 ---
 
-## The admin console
+## The dashboard
 
-`https://<your-service>/admin/` — a web UI for managing everything without
-needing a shell.
+`https://<your-service>/dashboard/` — the everyday console. Three screens:
+
+| Screen | What it is for |
+|---|---|
+| **Files** | Walk into a category, see what is inside, add and upload there |
+| **All categories** | The whole tree as one flat list, for adding at any depth |
+| **Users** | Create accounts, set passwords, choose Admin or User |
+
+**Files** is the one to use day to day. It opens on your main categories; click
+one and you are inside it, looking at its subcategories and its documents in a
+single list — the way a folder works on a computer. The two buttons at the top
+add a category or upload documents **into wherever you are standing**, so there
+is no parent to pick and nothing to get wrong. The breadcrumb walks back up.
+
+Subcategories and documents share one row design, because at that point they
+are the same kind of thing: something that lives in a category. Categories sort
+first, then documents.
+
+Deleting from here is a recycle-bin delete — nothing is destroyed. Deleting a
+category takes everything inside it, and the confirmation says so.
+
+---
+
+## The Django admin
+
+`https://<your-service>/admin/` — the deeper console, for the things the
+dashboard does not cover: the recycle bin, share links, devices, OTP
+diagnostics, and editing any field directly.
 
 **Only an Admin can get in.** Console access is the `role` field, not a separate
 staff flag, so the two can never drift apart. A User account is bounced back to

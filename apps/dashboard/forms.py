@@ -192,3 +192,76 @@ class CategoryForm(forms.Form):
             where = parent.name if parent else "the top level"
             self.add_error("name", f"“{name}” already exists in {where}.")
         return cleaned
+
+
+class InlineCategoryForm(forms.Form):
+    """Add a category from inside the explorer.
+
+    The parent is not a field: it is wherever you are standing. That is the
+    whole point of the explorer - you navigate to the place, then add there -
+    and a parent picker would let the two disagree.
+    """
+
+    name = forms.CharField(
+        label="Name",
+        max_length=255,
+        widget=forms.TextInput(attrs={"placeholder": "New category name", "autofocus": True}),
+    )
+    description = forms.CharField(
+        label="Description",
+        required=False,
+        widget=forms.TextInput(attrs={"placeholder": "Optional"}),
+    )
+
+    def __init__(self, *args, parent: Folder | None = None, **kwargs) -> None:
+        self.parent = parent
+        super().__init__(*args, **kwargs)
+
+    def clean_name(self) -> str:
+        try:
+            return validate_node_name(self.cleaned_data["name"], kind="category")
+        except ValidationFailed as exc:
+            raise forms.ValidationError(str(exc.detail)) from exc
+
+    def clean(self) -> dict:
+        cleaned = super().clean()
+        name = cleaned.get("name")
+
+        if name and Folder.objects.filter(parent=self.parent, name__iexact=name).exists():
+            where = self.parent.name if self.parent else "the top level"
+            self.add_error("name", f"“{name}” already exists in {where}.")
+        return cleaned
+
+
+class MultipleFileInput(forms.ClearableFileInput):
+    """The stock widget refuses ``multiple``; this is Django's documented opt-in."""
+
+    allow_multiple_selected = True
+
+
+class MultipleFileField(forms.FileField):
+    """A file field that cleans every selected file, not just the last one."""
+
+    def __init__(self, *args, **kwargs) -> None:
+        kwargs.setdefault("widget", MultipleFileInput())
+        super().__init__(*args, **kwargs)
+
+    def clean(self, data, initial=None) -> list:
+        clean_one = super().clean
+        if isinstance(data, list | tuple):
+            return [clean_one(item, initial) for item in data]
+        return [clean_one(data, initial)]
+
+
+class UploadForm(forms.Form):
+    """Put documents into the category currently open.
+
+    Deliberately thin: every rule about what may be uploaded - size, extension,
+    name - lives in the file service, which the API uses too. Duplicating any
+    of it here would mean two places to change and one to forget.
+    """
+
+    file = MultipleFileField(
+        label="Documents",
+        help_text="PDF, image, Word, Excel. You can select more than one.",
+    )
