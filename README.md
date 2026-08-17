@@ -142,11 +142,11 @@ Open <http://localhost:8000/api/docs/> for the interactive API documentation.
 
 | Screen | What it is for |
 |---|---|
-| **Files** | Walk into a category, see what is inside, add and upload there |
-| **All categories** | The whole tree as one flat list, for adding at any depth |
+| **All categories** | Walk into a category, see what is inside, add and upload there |
+| **Category tree** | The whole tree as one flat list, for adding at any depth |
 | **Users** | Create accounts, set passwords, choose Admin or User |
 
-**Files** is the one to use day to day. It opens on your main categories; click
+**All categories** is the one to use day to day. It opens on your main categories; click
 one and you are inside it, looking at its subcategories and its documents in a
 single list — the way a folder works on a computer. The two buttons at the top
 add a category or upload documents **into wherever you are standing**, so there

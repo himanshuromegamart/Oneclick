@@ -1,11 +1,11 @@
 {% extends "dashboard/base.html" %}
 {% load dashboard_extras %}
 
-{% block title %}Categories{% endblock %}
-{% block heading %}Categories{% endblock %}
+{% block title %}Category tree{% endblock %}
+{% block heading %}Category tree{% endblock %}
 {% block subheading %}
-  A category, a subcategory and a folder are the same thing — what makes one a
-  subcategory is simply choosing a parent.
+  Every category at once, however deep. Useful for adding somewhere without
+  walking to it first — pick the parent and it goes straight there.
 {% endblock %}
 
 {% block content %}
@@ -38,7 +38,7 @@
 </div>
 
 <div class="card">
-  <h2>All categories · {{ tree|length }}</h2>
+  <h2>The whole tree · {{ tree|length }}</h2>
   {% if tree %}
     <div class="table-wrap">
       <table>

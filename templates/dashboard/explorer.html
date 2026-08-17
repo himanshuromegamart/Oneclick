@@ -1,7 +1,7 @@
 {% extends "dashboard/base.html" %}
 
-{% block title %}{% if here %}{{ here.name }}{% else %}Files{% endif %}{% endblock %}
-{% block heading %}{% if here %}{{ here.name }}{% else %}Files{% endif %}{% endblock %}
+{% block title %}{% if here %}{{ here.name }}{% else %}All categories{% endif %}{% endblock %}
+{% block heading %}{% if here %}{{ here.name }}{% else %}All categories{% endif %}{% endblock %}
 {% block subheading %}
   {% if here %}
     {{ listing.category_count }} categor{{ listing.category_count|pluralize:"y,ies" }},
