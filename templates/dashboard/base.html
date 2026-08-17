@@ -84,7 +84,8 @@
         On every page, because the moment you want to search is the moment you
         have given up navigating - so it must not itself need navigating to.
       {% endcomment %}
-      <form class="search" method="get" action="{% url 'dashboard:search' %}" role="search">
+      <form class="search" method="get" action="{% url 'dashboard:search' %}" role="search"
+            data-suggest-url="{% url 'dashboard:search-suggest' %}">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
              stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>
@@ -119,5 +120,6 @@
   one is not a comment at all - it renders onto the page as text.
 {% endcomment %}
 <script src="{% static 'dashboard/combobox.js' %}" defer></script>
+<script src="{% static 'dashboard/search.js' %}" defer></script>
 </body>
 </html>

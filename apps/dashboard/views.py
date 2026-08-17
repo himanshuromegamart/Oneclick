@@ -19,7 +19,13 @@ from urllib.parse import quote
 from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout
 from django.db.models import Count, Q
-from django.http import Http404, HttpRequest, HttpResponse, StreamingHttpResponse
+from django.http import (
+    Http404,
+    HttpRequest,
+    HttpResponse,
+    JsonResponse,
+    StreamingHttpResponse,
+)
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils.http import content_disposition_header
@@ -425,6 +431,55 @@ def search(request: HttpRequest) -> HttpResponse:
         request,
         "dashboard/search.html",
         {"active": "search", "term": term.strip(), "results": results},
+    )
+
+
+#: Rows in the type-ahead panel. Small on purpose: a dropdown is for
+#: recognising the thing you already had in mind, not for browsing. Anything
+#: longer belongs on the full results page.
+SUGGEST_LIMIT = 8
+
+#: Below this, a term matches too much to be worth a round trip - one letter
+#: would return the first eight rows of the database and teach nothing.
+SUGGEST_MIN_LENGTH = 2
+
+
+@never_cache
+@admin_required
+def search_suggest(request: HttpRequest) -> JsonResponse:
+    """Type-ahead results for the search box, as JSON.
+
+    Separate from the search page rather than the same view content-negotiating,
+    because the two answer different questions: this one is deliberately short
+    and shaped for one row of a dropdown.
+    """
+    term = request.GET.get("q", "").strip()
+    if len(term) < SUGGEST_MIN_LENGTH:
+        return JsonResponse({"q": term, "results": [], "more_url": ""})
+
+    found = nodes.search(term, limit=SUGGEST_LIMIT)
+
+    # Categories first, same order as everywhere else, then documents fill
+    # whatever room is left.
+    hits = (found.categories + found.documents)[:SUGGEST_LIMIT]
+
+    return JsonResponse(
+        {
+            "q": term,
+            "results": [
+                {
+                    "kind": hit.node.kind,
+                    "tone": hit.node.tone,
+                    "name": hit.node.name,
+                    "detail": hit.node.detail,
+                    "location": hit.location,
+                    "url": hit.node.url,
+                    "is_container": hit.node.is_container,
+                }
+                for hit in hits
+            ],
+            "more_url": f"{reverse('dashboard:search')}?q={quote(term)}",
+        }
     )
 
 

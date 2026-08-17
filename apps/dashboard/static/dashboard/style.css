@@ -432,6 +432,8 @@ tbody tr:hover { background: #fafcfe; }
 /* --- search -------------------------------------------------------------- */
 
 .search {
+  /* Anchors the type-ahead panel. */
+  position: relative;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -464,6 +466,103 @@ tbody tr:hover { background: #fafcfe; }
 .search input::-webkit-search-cancel-button { margin-right: 4px; }
 
 .search .btn { flex: none; border-radius: 99px; padding: 9px 18px; }
+
+/* --- type-ahead panel ---------------------------------------------------- */
+
+.suggest {
+  position: absolute;
+  z-index: 50;
+  top: calc(100% + 7px);
+  left: 0;
+  right: 0;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+
+.suggest-list {
+  margin: 0;
+  padding: 5px;
+  list-style: none;
+  /* Capped so a full panel never runs off a short screen. */
+  max-height: 60vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.suggest-row a {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 9px 10px;
+  border-radius: 8px;
+  text-decoration: none;
+  color: inherit;
+}
+.suggest-row:hover a,
+.suggest-row.is-active a { background: var(--brand-tint); }
+
+.suggest-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: #f1f5f9;
+  color: var(--ink-soft);
+}
+.suggest-icon svg { width: 17px; height: 17px; }
+/* Same colour language as the listing rows, so a result looks like the thing
+   you will find when you get there. */
+.suggest-icon[data-tone="category"]     { background: var(--brand-tint); color: var(--brand); }
+.suggest-icon[data-tone="document"]     { background: #fef2f2; color: #b91c1c; }
+.suggest-icon[data-tone="image"]        { background: #eef7f2; color: #0f766e; }
+.suggest-icon[data-tone="video"]        { background: #f5f3ff; color: #6d28d9; }
+.suggest-icon[data-tone="spreadsheet"]  { background: #ecfdf5; color: #047857; }
+.suggest-icon[data-tone="presentation"] { background: #fff7ed; color: #c2410c; }
+.suggest-icon[data-tone="archive"]      { background: #fefce8; color: #a16207; }
+
+.suggest-text { min-width: 0; flex: 1; }
+.suggest-name {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.suggest-where {
+  display: block;
+  margin-top: 1px;
+  font-size: 12px;
+  color: var(--brand);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.suggest-more {
+  border-top: 1px solid var(--line);
+  margin-top: 4px;
+  padding-top: 4px;
+}
+.suggest-more a {
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--brand);
+}
+
+.suggest-empty {
+  padding: 18px 12px;
+  font-size: 13.5px;
+  color: var(--ink-faint);
+  text-align: center;
+}
 
 /* Where a result lives. Only search sets it - see templates/dashboard/_node.html. */
 .node-where {

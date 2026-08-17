@@ -160,6 +160,12 @@ first, then documents.
 Deleting from here is a recycle-bin delete — nothing is destroyed. Deleting a
 category takes everything inside it, and the confirmation says so.
 
+**Search suggests as you type.** Results appear in a panel under the box after
+the second character, so most of the time you never press Enter — you see the
+thing and click it. Arrow keys move, Enter opens, Escape closes. Pressing Enter
+without picking anything goes to the full results page, and if the script fails
+to load the box is still an ordinary form with a Search button.
+
 **Search is global and forgiving.** The box sits on every page, and searches
 categories and documents together across the whole tree — you never have to
 know which category something went into. Spelling does not have to be exact:

@@ -283,6 +283,168 @@ class TestTheResultCap:
         assert not nodes.search("Brochure").is_capped
 
 
+class TestTypeAhead:
+    """The JSON behind search-as-you-type.
+
+    The panel is drawn by JavaScript, so what is testable here is the contract
+    it draws from - and that contract is where the mistakes would be.
+    """
+
+    def suggest(self, browser, term):
+        return browser.get(reverse("dashboard:search-suggest"), {"q": term})
+
+    def test_it_answers_json(self, browser, tree):
+        response = self.suggest(browser, "Brochure")
+
+        assert response.status_code == 200
+        assert response["Content-Type"].startswith("application/json")
+
+    def test_it_returns_matches(self, browser, tree):
+        payload = self.suggest(browser, "Brochure").json()
+
+        assert [row["name"] for row in payload["results"]] == ["Brochure.pdf"]
+
+    def test_every_row_carries_what_the_panel_draws(self, browser, tree):
+        row = self.suggest(browser, "Brochure").json()["results"][0]
+
+        # Pinned because the panel reads exactly these; a rename here is a
+        # silently blank dropdown, which no other test would catch.
+        assert set(row) == {
+            "kind",
+            "tone",
+            "name",
+            "detail",
+            "location",
+            "url",
+            "is_container",
+        }
+
+    def test_a_row_says_where_it_is(self, browser, tree):
+        row = self.suggest(browser, "Brochure").json()["results"][0]
+
+        assert row["location"] == PATH_SEPARATOR.join(["Products", "Water Cooler", "500 LPH"])
+
+    def test_a_row_links_to_the_thing(self, browser, tree):
+        row = self.suggest(browser, "Water Cooler").json()["results"][0]
+
+        assert row["url"] == reverse("dashboard:explorer", args=[tree["cooler"].pk])
+
+    def test_categories_come_first(self, browser, tree, admin, file_service):
+        file_service.upload(
+            admin,
+            folder_id=tree["cooler"].pk,
+            file_obj=io.BytesIO(b"%PDF-1.4 x"),
+            filename="Water Cooler manual.pdf",
+            size_bytes=10,
+            content_type="application/pdf",
+        )
+
+        kinds = [row["kind"] for row in self.suggest(browser, "Water Cooler").json()["results"]]
+
+        assert kinds.index("category") < kinds.index("document")
+
+    def test_it_is_capped_to_a_dropdown_worth(self, browser, admin):
+        from apps.dashboard.views import SUGGEST_LIMIT
+
+        repo = FolderRepository()
+        for index in range(SUGGEST_LIMIT + 6):
+            repo.create_folder(name=f"Widget {index:03d}", parent=None, created_by=admin)
+
+        payload = self.suggest(browser, "Widget").json()
+
+        assert len(payload["results"]) == SUGGEST_LIMIT
+
+    def test_it_offers_a_way_to_the_full_results(self, browser, tree):
+        payload = self.suggest(browser, "500 LPH").json()
+
+        assert payload["more_url"].startswith(reverse("dashboard:search"))
+        assert "500" in payload["more_url"]
+
+    def test_one_letter_is_not_worth_a_round_trip(self, browser, tree):
+        """It would match half the database and teach nothing."""
+        payload = self.suggest(browser, "P").json()
+
+        assert payload["results"] == []
+
+    def test_an_empty_term_returns_nothing(self, browser, tree):
+        assert self.suggest(browser, "").json()["results"] == []
+
+    def test_it_echoes_the_term(self, browser, tree):
+        """The script drops replies that no longer match what is typed, which
+        is what stops a slow answer overwriting a newer one."""
+        assert self.suggest(browser, "Brochure").json()["q"] == "Brochure"
+
+    def test_a_typo_still_suggests(self, browser, tree):
+        payload = self.suggest(browser, "brochre").json()
+
+        assert [row["name"] for row in payload["results"]] == ["Brochure.pdf"]
+
+    def test_it_is_admin_only(self, member, tree):
+        response = signed_in(member).get(reverse("dashboard:search-suggest"), {"q": "x"})
+
+        assert response.status_code == 302
+
+    def test_anonymous_gets_nothing(self, tree):
+        response = Client().get(reverse("dashboard:search-suggest"), {"q": "Brochure"})
+
+        assert response.status_code == 302
+        assert b"Brochure" not in response.content
+
+    def test_markup_cannot_get_into_a_name_in_the_first_place(
+        self, browser, tree, admin, file_service
+    ):
+        """The real protection, and it is upstream of this endpoint: the name
+        validator refuses angle brackets, so no row can carry markup at all."""
+        from apps.core.exceptions import ValidationFailed
+
+        with pytest.raises(ValidationFailed):
+            file_service.upload(
+                admin,
+                folder_id=tree["cooler"].pk,
+                file_obj=io.BytesIO(b"%PDF-1.4 x"),
+                filename="<img src=x onerror=alert(1)>.pdf",
+                size_bytes=10,
+                content_type="application/pdf",
+            )
+
+    def test_a_name_needing_escaping_survives_as_text(self, browser, tree, admin, file_service):
+        """Ampersands are legal in a name. They must arrive as an ampersand,
+        not as an entity and not as the start of anything."""
+        file_service.upload(
+            admin,
+            folder_id=tree["cooler"].pk,
+            file_obj=io.BytesIO(b"%PDF-1.4 x"),
+            filename="Price & Terms.pdf",
+            size_bytes=10,
+            content_type="application/pdf",
+        )
+
+        payload = self.suggest(browser, "Terms").json()
+
+        assert "Price & Terms.pdf" in [row["name"] for row in payload["results"]]
+
+
+class TestTheBoxStillWorksWithoutJavaScript:
+    """The type-ahead is an enhancement. The form underneath must stand alone."""
+
+    def test_the_form_is_a_plain_get_to_the_results_page(self, browser):
+        content = browser.get(reverse("dashboard:explorer-root")).content.decode()
+
+        assert 'method="get"' in content
+        assert f'action="{reverse("dashboard:search")}"' in content
+
+    def test_it_carries_a_submit_button(self, browser):
+        content = browser.get(reverse("dashboard:explorer-root")).content
+
+        assert b'type="submit"' in content
+
+    def test_the_enhancement_is_opt_in_per_form(self, browser):
+        """The script only touches a form that names its endpoint."""
+        content = browser.get(reverse("dashboard:explorer-root")).content.decode()
+
+        assert f'data-suggest-url="{reverse("dashboard:search-suggest")}"' in content
+
+
 class TestActingOnAResult:
     def test_a_result_links_to_where_it_lives(self, browser, tree):
         content = results_for(browser, "Water Cooler").content.decode()

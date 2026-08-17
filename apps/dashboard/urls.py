@@ -19,4 +19,5 @@ urlpatterns = [
     path("explorer/<uuid:folder_id>/", views.explorer, name="explorer"),
     path("documents/<uuid:file_id>/open/", views.document_open, name="document-open"),
     path("search/", views.search, name="search"),
+    path("search/suggest/", views.search_suggest, name="search-suggest"),
 ]
