@@ -16,6 +16,7 @@ from __future__ import annotations
 import logging
 from urllib.parse import quote
 
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout
 from django.db.models import Count, Q
@@ -512,7 +513,14 @@ def document_open(request: HttpRequest, file_id) -> HttpResponse:
     if file is None:
         raise Http404("Document not found.")
 
-    as_attachment = bool(request.GET.get("download"))
+    # Some types are never safe to display from our own domain, whatever was
+    # asked for: an uploaded HTML or SVG page rendered here would be running
+    # script on the origin that holds the admin's session. Downloading it is
+    # harmless, so that is the only option those get.
+    forced = file.extension.lower() in {
+        item.lower() for item in settings.STORAGE_SETTINGS["NEVER_INLINE_EXTENSIONS"]
+    }
+    as_attachment = bool(request.GET.get("download")) or forced
 
     try:
         chunks = FileService().open_stream(request.user, file, as_attachment=as_attachment)
@@ -522,7 +530,11 @@ def document_open(request: HttpRequest, file_id) -> HttpResponse:
 
     response = StreamingHttpResponse(
         chunks,
-        content_type=file.mime_type or guess_mime_type(file.name),
+        # A forced-download type is sent as bytes rather than under its real
+        # type, so no browser can be tempted to render it anyway.
+        content_type=(
+            "application/octet-stream" if forced else (file.mime_type or guess_mime_type(file.name))
+        ),
     )
     response["Content-Disposition"] = content_disposition_header(as_attachment, file.name)
     # Nothing here is a shared asset, and the URL is behind a session.

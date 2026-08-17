@@ -166,6 +166,25 @@ class StorageBackend(abc.ABC):
         return ""
 
 
+def _upload_failure_message(exc: Exception) -> str:
+    """Turn a provider error into something worth showing a person.
+
+    Cloudinary says exactly what went wrong - "File size too large. Got
+    15728640. Maximum is 10485760." - and hiding that behind "please try
+    again" sends somebody to retry an upload that can never succeed. The size
+    ceiling in particular is a plan limit, not a glitch, and the only useful
+    response is to know that.
+    """
+    reason = str(exc)
+    if "File size too large" in reason or "too large" in reason.lower():
+        return (
+            "The storage provider rejected this file for being too large. "
+            "Cloudinary caps the file size on its free plan - upgrading the "
+            "plan, or splitting the file, are the two ways past it."
+        )
+    return "The file could not be uploaded. Please try again."
+
+
 class CloudinaryStorageBackend(StorageBackend):
     """Production adapter."""
 
@@ -228,9 +247,16 @@ class CloudinaryStorageBackend(StorageBackend):
                 **options,
             )
         except Exception as exc:
-            logger.error("cloudinary_upload_failed", exc_info=exc, extra={"filename": filename})
+            # NB "upload_name", not "filename". `filename` is a reserved
+            # attribute on a LogRecord, and passing one in `extra` raises
+            # KeyError from inside logging - which replaces the clean error
+            # below with a crash, on the one path that exists to report a
+            # failure nicely. Reserved names to avoid: name, msg, args,
+            # levelname, pathname, filename, module, lineno, funcName, created,
+            # process, thread.
+            logger.error("cloudinary_upload_failed", exc_info=exc, extra={"upload_name": filename})
             raise ExternalServiceError(
-                detail="The file could not be uploaded. Please try again.",
+                detail=_upload_failure_message(exc),
                 code=ErrorCode.UPLOAD_FAILED,
             ) from exc
 

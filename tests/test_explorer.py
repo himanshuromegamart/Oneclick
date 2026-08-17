@@ -9,6 +9,8 @@ error.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client
@@ -243,6 +245,194 @@ class TestUploading:
 
         child_folder.refresh_from_db()
         assert child_folder.file_count == 1
+
+
+class TestWhenTheProviderRefuses:
+    """What the person sees when storage says no.
+
+    This path was broken in a way no test noticed: the handler logged with
+    ``extra={"filename": ...}``, and `filename` is a reserved attribute on a
+    LogRecord, so logging raised KeyError from inside the except block. The
+    clean error never got raised - the one code path whose entire job is to
+    report a failure nicely, crashed.
+    """
+
+    def _failing_storage(self, monkeypatch, message):
+        from apps.files.storage import CloudinaryStorageBackend
+
+        def boom(*args, **kwargs):
+            raise RuntimeError(message)
+
+        monkeypatch.setattr(CloudinaryStorageBackend, "_configure", lambda self: None)
+        monkeypatch.setattr("cloudinary.uploader.upload", boom, raising=False)
+        return CloudinaryStorageBackend()
+
+    def test_a_provider_error_raises_our_error_not_a_crash(self, monkeypatch):
+        import io
+
+        from apps.core.exceptions import ExternalServiceError
+
+        storage = self._failing_storage(monkeypatch, "Error: something went wrong")
+
+        with pytest.raises(ExternalServiceError):
+            storage.upload(
+                io.BytesIO(b"x"),
+                filename="report.pdf",
+                folder_path="x",
+                resource_type="raw",
+            )
+
+    def test_a_size_rejection_says_so_in_words(self, monkeypatch):
+        """Cloudinary names the real cause; "please try again" would send
+        somebody to retry an upload that can never succeed."""
+        import io
+
+        from apps.core.exceptions import ExternalServiceError
+
+        storage = self._failing_storage(
+            monkeypatch, "Error: File size too large. Got 15728649. Maximum is 10485760."
+        )
+
+        with pytest.raises(ExternalServiceError) as caught:
+            storage.upload(
+                io.BytesIO(b"x"),
+                filename="big.pdf",
+                folder_path="x",
+                resource_type="raw",
+            )
+
+        assert "too large" in str(caught.value.detail)
+
+    def test_the_dashboard_shows_it_rather_than_a_500(self, browser, child_folder, monkeypatch):
+        from apps.core.exceptions import ExternalServiceError
+        from apps.files.services import FileService
+
+        def refuse(*args, **kwargs):
+            raise ExternalServiceError(detail="The storage provider rejected this file.")
+
+        monkeypatch.setattr(FileService, "upload", refuse)
+
+        response = browser.post(
+            reverse("dashboard:explorer", args=[child_folder.pk]),
+            {"action": "upload", "file": pdf("big.pdf")},
+            follow=True,
+        )
+
+        assert response.status_code == 200
+        assert b"rejected this file" in response.content
+
+
+class TestSizeAndTypeLimits:
+    def test_the_shipped_default_matches_what_the_provider_accepts(self):
+        """Read from the module rather than settings: an environment can
+        override the value, and what is being pinned here is the default we
+        ship - a bigger one only means the upload travels the whole way to
+        Cloudinary before being refused."""
+        import importlib
+
+        base = importlib.import_module("config.settings.base")
+        source = Path(base.__file__).read_text(encoding="utf-8")
+
+        assert 'env_int("MAX_UPLOAD_BYTES", 10 * 1024 * 1024)' in source
+
+    def test_the_refusal_names_the_limit(self, browser, child_folder, settings):
+        """So the person knows what would fit, not just that this did not."""
+        settings.STORAGE_SETTINGS = {
+            **settings.STORAGE_SETTINGS,
+            "MAX_UPLOAD_BYTES": 2 * 1024 * 1024,
+        }
+        big = SimpleUploadedFile(
+            "big.pdf", b"x" * (3 * 1024 * 1024), content_type="application/pdf"
+        )
+
+        response = browser.post(
+            reverse("dashboard:explorer", args=[child_folder.pk]),
+            {"action": "upload", "file": big},
+            follow=True,
+        )
+
+        assert b"2 MB" in response.content
+
+    def test_an_oversize_file_is_refused_before_it_is_sent(self, browser, child_folder, settings):
+        settings.STORAGE_SETTINGS = {
+            **settings.STORAGE_SETTINGS,
+            "MAX_UPLOAD_BYTES": 1024,
+        }
+        big = SimpleUploadedFile("big.pdf", b"x" * 4096, content_type="application/pdf")
+
+        response = browser.post(
+            reverse("dashboard:explorer", args=[child_folder.pk]),
+            {"action": "upload", "file": big},
+            follow=True,
+        )
+
+        assert b"exceeds" in response.content
+        assert not FileAsset.objects.filter(name="big.pdf").exists()
+
+    def test_a_saved_web_page_is_accepted(self, browser, child_folder):
+        """Project galleries and presentations arrive as saved HTML."""
+        page = SimpleUploadedFile(
+            "Project Gallery.html", b"<html>gallery</html>", content_type="text/html"
+        )
+
+        browser.post(
+            reverse("dashboard:explorer", args=[child_folder.pk]),
+            {"action": "upload", "file": page},
+        )
+
+        assert FileAsset.objects.filter(name="Project Gallery.html").exists()
+
+    def test_an_executable_is_still_refused(self, browser, child_folder):
+        bad = SimpleUploadedFile("setup.exe", b"MZ", content_type="application/octet-stream")
+
+        browser.post(
+            reverse("dashboard:explorer", args=[child_folder.pk]),
+            {"action": "upload", "file": bad},
+        )
+
+        assert not FileAsset.objects.filter(name="setup.exe").exists()
+
+
+class TestRiskyTypesNeverRenderOnOurDomain:
+    """We serve documents from our own origin, so an HTML file displayed here
+    would be script running beside the admin's session cookie."""
+
+    @pytest.fixture
+    def page(self, browser, child_folder):
+        browser.post(
+            reverse("dashboard:explorer", args=[child_folder.pk]),
+            {
+                "action": "upload",
+                "file": SimpleUploadedFile(
+                    "Gallery.html",
+                    b"<script>alert(1)</script>",
+                    content_type="text/html",
+                ),
+            },
+        )
+        return FileAsset.objects.get(name="Gallery.html")
+
+    def test_it_downloads_even_when_asked_to_open(self, browser, page):
+        response = browser.get(reverse("dashboard:document-open", args=[page.pk]))
+
+        assert response["Content-Disposition"].startswith("attachment")
+
+    def test_it_is_not_served_as_html(self, browser, page):
+        response = browser.get(reverse("dashboard:document-open", args=[page.pk]))
+
+        assert "text/html" not in response["Content-Type"]
+
+    def test_sniffing_is_refused_too(self, browser, page):
+        response = browser.get(reverse("dashboard:document-open", args=[page.pk]))
+
+        assert response["X-Content-Type-Options"] == "nosniff"
+
+    def test_a_pdf_still_opens_inline(self, browser, sample_file):
+        """The safeguard must not spread to everything."""
+        response = browser.get(reverse("dashboard:document-open", args=[sample_file.pk]))
+
+        assert response["Content-Disposition"].startswith("inline")
+        assert response["Content-Type"] == "application/pdf"
 
 
 class TestDeleting:

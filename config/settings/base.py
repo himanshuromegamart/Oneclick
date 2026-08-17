@@ -404,7 +404,13 @@ CLOUDINARY = {
 }
 
 STORAGE_SETTINGS = {
-    "MAX_UPLOAD_BYTES": env_int("MAX_UPLOAD_BYTES", 200 * 1024 * 1024),
+    # Mirrors what Cloudinary will actually accept: its free plan rejects any
+    # file over 10 MB outright ("File size too large. Got 11534345. Maximum is
+    # 10485760."). Claiming a larger limit here does not make a larger file
+    # storable - it just means the upload travels all the way to the provider
+    # before failing, having spent the person's time and bandwidth to get
+    # there. Raise this the day the Cloudinary plan is raised, not before.
+    "MAX_UPLOAD_BYTES": env_int("MAX_UPLOAD_BYTES", 10 * 1024 * 1024),
     "RECYCLE_BIN_RETENTION_DAYS": env_int("RECYCLE_BIN_RETENTION_DAYS", 30),
     "MAX_FILE_VERSIONS": env_int("MAX_FILE_VERSIONS", 20),
     "SHARE_LINK_TTL_HOURS": env_int("SHARE_LINK_TTL_HOURS", 168),
@@ -439,11 +445,27 @@ STORAGE_SETTINGS = {
             "7z",
             "dwg",
             "dxf",
+            # Saved web pages - project galleries and presentations arrive as
+            # these. Always served as a download, never rendered on our own
+            # domain; see NEVER_INLINE_EXTENSIONS below.
+            "html",
+            "htm",
         ],
     ),
     "BLOCKED_EXTENSIONS": env_list(
         "BLOCKED_EXTENSIONS",
         ["exe", "bat", "cmd", "sh", "msi", "dll", "so", "js", "jar", "ps1", "vbs", "scr"],
+    ),
+    # Types that must always download rather than display, whatever their
+    # content type says.
+    #
+    # The dashboard serves documents from its own domain - it has to, or a PDF
+    # arrives as an unnamed blob. That makes an uploaded HTML or SVG file a
+    # script running on our origin, with the signed-in admin's session cookie
+    # sitting right there, if it were ever rendered inline. Downloading it is
+    # harmless; displaying it is not.
+    "NEVER_INLINE_EXTENSIONS": env_list(
+        "NEVER_INLINE_EXTENSIONS", ["html", "htm", "svg", "xml", "xhtml"]
     ),
 }
 

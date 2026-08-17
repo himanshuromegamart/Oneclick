@@ -103,8 +103,10 @@ services:
         value: "300"
       - key: OTP_MAX_SENDS_PER_DAY
         value: "10"
+      # 10 MB - what Cloudinary's free plan accepts. Raising this without
+      # raising the Cloudinary plan just moves the failure later.
       - key: MAX_UPLOAD_BYTES
-        value: "209715200"
+        value: "10485760"
       - key: RECYCLE_BIN_RETENTION_DAYS
         value: "30"
       - key: SHARE_LINK_TTL_HOURS

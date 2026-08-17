@@ -36,9 +36,17 @@ Opening one is a single request — `GET /api/v1/browse/?parent_id=<id>` returns
 the subfolders and the documents inside it together, in one list, with the
 breadcrumb. That is what the app's main screen uses.
 
-**Files.** PDF, Word, Excel, images, video, and so on. Upload into any folder,
-then rename, move, copy, download, and keep previous versions. Deleted items go
-to a recycle bin and can be restored.
+**Files.** PDF, Word, Excel, images, video, saved web pages, and so on. Upload
+into any folder, then rename, move, copy, download, and keep previous versions.
+Deleted items go to a recycle bin and can be restored.
+
+> **There is a 10 MB ceiling on every file, and it is Cloudinary's, not ours.**
+> Its free plan refuses anything larger — `File size too large. Got 11534345.
+> Maximum is 10485760.` The app's own limit (`MAX_UPLOAD_BYTES`) is set to
+> match, so an oversized file is refused immediately instead of being uploaded
+> all the way to Cloudinary before failing. Raising it without upgrading the
+> Cloudinary plan does not store bigger files; it only moves the failure later.
+> When the plan is upgraded, raise `MAX_UPLOAD_BYTES` to match the new ceiling.
 
 **Login.** Two ways, both giving the same access:
 
