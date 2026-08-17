@@ -17,14 +17,21 @@ of those grows an ``{% if %}``.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from typing import Any
 
 from django.urls import reverse
 
 from apps.files.models import FileAsset
 from apps.files.repositories import FileRepository
+from apps.files.search import search_files, search_folders
 from apps.folders.models import Folder
 from apps.folders.repositories import FolderRepository
+
+# What separates the segments of a category path when one is written out in
+# full. Written as an escape so it survives editors and terminals that mangle
+# the character.
+PATH_SEPARATOR = " \N{SINGLE RIGHT-POINTING ANGLE QUOTATION MARK} "
 
 
 class Node(ABC):
@@ -256,3 +263,110 @@ def children_of(folder: Folder | None, *, offset: int = 0, limit: int | None = N
 
     nodes: list[Node] = [Category(f) for f in folders] + [Document(f) for f in files]
     return Listing(nodes, category_count, document_count, offset, limit)
+
+
+# ---------------------------------------------------------------------------
+# Search
+# ---------------------------------------------------------------------------
+#: Results kept per kind. Search is ranked, so the useful answer is near the
+#: top; the cap exists to stop a one-letter query rendering the whole database
+#: as one page. When it bites, the screen says so rather than silently
+#: truncating.
+SEARCH_LIMIT = 60
+
+
+@dataclass(frozen=True)
+class Hit:
+    """A search result: the node, and where in the tree it lives.
+
+    The location is the whole point of a *global* search. "500 LPH" on its own
+    is useless when four products have one; "Products > Water Cooler" is the
+    answer to the question actually being asked.
+    """
+
+    node: Node
+    location: str
+
+
+@dataclass(frozen=True)
+class SearchResults:
+    term: str
+    categories: list[Hit]
+    documents: list[Hit]
+    category_capped: bool
+    document_capped: bool
+
+    @property
+    def total(self) -> int:
+        return len(self.categories) + len(self.documents)
+
+    @property
+    def is_empty(self) -> bool:
+        return self.total == 0
+
+    @property
+    def is_capped(self) -> bool:
+        return self.category_capped or self.document_capped
+
+
+def _name_lookup(folders: list[Folder]) -> dict[Any, str]:
+    """Name for every folder mentioned by these results, in one query.
+
+    Ancestors come from the stored materialised path, so the names needed to
+    write out every result's location are fetched in a single go rather than by
+    walking parents per row - the difference between one query and several
+    hundred on a page of results.
+    """
+    wanted: set[Any] = set()
+    for folder in folders:
+        wanted.update(folder.ancestor_ids)
+        wanted.add(folder.pk)
+
+    if not wanted:
+        return {}
+    return dict(Folder.all_objects.filter(pk__in=wanted).values_list("id", "name"))
+
+
+def _location_of(folder: Folder, names: dict[Any, str], *, include_self: bool) -> str:
+    """Where something sits, written as a path a person can read.
+
+    ``include_self`` is the difference between a document - which lives *in*
+    this folder, so the folder is part of the answer - and a category, whose
+    location is everything above it.
+    """
+    parts = [names[pk] for pk in folder.ancestor_ids if pk in names]
+    if include_self:
+        parts.append(folder.name)
+    return PATH_SEPARATOR.join(parts) if parts else "Top level"
+
+
+def search(term: str, *, limit: int = SEARCH_LIMIT) -> SearchResults:
+    """Find categories and documents anywhere in the tree.
+
+    Both halves come from the same Postgres search the mobile app uses, so a
+    term that works in one works in the other - including the typo tolerance,
+    which is the difference between search feeling forgiving and feeling
+    literal.
+    """
+    term = (term or "").strip()
+    if not term:
+        return SearchResults(term, [], [], False, False)
+
+    # One extra row of each: the cheapest way to know whether the cap bit
+    # without running a second COUNT over a ranked query.
+    folders = list(search_folders(term)[: limit + 1])
+    files = list(search_files(term)[: limit + 1])
+
+    category_capped, document_capped = len(folders) > limit, len(files) > limit
+    folders, files = folders[:limit], files[:limit]
+
+    names = _name_lookup(folders + [file.folder for file in files])
+
+    categories = [
+        Hit(Category(folder), _location_of(folder, names, include_self=False)) for folder in folders
+    ]
+    documents = [
+        Hit(Document(file), _location_of(file.folder, names, include_self=True)) for file in files
+    ]
+
+    return SearchResults(term, categories, documents, category_capped, document_capped)

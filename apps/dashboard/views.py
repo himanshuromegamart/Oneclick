@@ -14,6 +14,7 @@ disagree about what is allowed.
 from __future__ import annotations
 
 import logging
+from urllib.parse import quote
 
 from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout
@@ -294,8 +295,13 @@ def _upload(request: HttpRequest, here: Folder | None) -> HttpResponse | None:
     return _redirect_here(here)
 
 
-def _delete_node(request: HttpRequest, here: Folder | None) -> HttpResponse:
-    """Recycle-bin delete for either kind of node - nothing is destroyed here."""
+def _perform_delete(request: HttpRequest) -> None:
+    """Recycle-bin delete for either kind of node - nothing is destroyed here.
+
+    Split from the redirect because the same row partial, and so the same
+    form, is rendered by both the explorer and the search results, and each
+    needs to send you back where you were.
+    """
     kind = request.POST.get("kind")
     node_id = request.POST.get("node_id")
 
@@ -313,8 +319,6 @@ def _delete_node(request: HttpRequest, here: Folder | None) -> HttpResponse:
         if file is not None:
             FileService().delete(request.user, file)
             messages.success(request, f"“{file.name}” moved to the recycle bin.")
-
-    return _redirect_here(here)
 
 
 def _redirect_here(here: Folder | None) -> HttpResponse:
@@ -353,7 +357,8 @@ def explorer(request: HttpRequest, folder_id=None) -> HttpResponse:
                 return redirect_to
             upload_form = UploadForm(request.POST, request.FILES)
         elif action == "delete":
-            return _delete_node(request, here)
+            _perform_delete(request)
+            return _redirect_here(here)
 
     try:
         page = max(int(request.GET.get("page", 1)), 1)
@@ -387,6 +392,39 @@ def explorer(request: HttpRequest, folder_id=None) -> HttpResponse:
             "next_page": page + 1,
             "previous_page": page - 1,
         },
+    )
+
+
+@never_cache
+@admin_required
+@require_http_methods(["GET", "POST"])
+def search(request: HttpRequest) -> HttpResponse:
+    """Find anything, anywhere in the tree.
+
+    Global by design: the explorer answers "what is in here", and this answers
+    "where is that" - which is the question you have when you cannot remember
+    which category something went into, and the only one the tree cannot
+    answer by itself.
+
+    The same Postgres search the mobile app uses, so a term that finds
+    something on a phone finds it here, typo tolerance included.
+    """
+    term = request.GET.get("q", "")
+
+    # The results use the same row partial as the explorer, delete button and
+    # all, and that form posts back to whatever page drew it. Handling it here
+    # is what stops the button being decoration on this page.
+    if request.method == "POST" and request.POST.get("action") == "delete":
+        _perform_delete(request)
+        term = request.POST.get("q", term)
+        return redirect(f"{reverse('dashboard:search')}?q={quote(term)}")
+
+    results = nodes.search(term)
+
+    return render(
+        request,
+        "dashboard/search.html",
+        {"active": "search", "term": term.strip(), "results": results},
     )
 
 

@@ -429,6 +429,53 @@ tbody tr:hover { background: #fafcfe; }
   color: var(--ink-faint);
 }
 
+/* --- search -------------------------------------------------------------- */
+
+.search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 18px;
+  padding: 6px 6px 6px 14px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 99px;
+  box-shadow: var(--shadow);
+}
+.search:focus-within {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px rgba(11, 111, 181, .13);
+}
+.search > svg { width: 18px; height: 18px; flex: none; color: var(--ink-faint); }
+
+.search input {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 0;
+  font: inherit;
+  font-size: 14.5px;
+  color: var(--ink);
+  background: none;
+  border: 0;
+  outline: none;
+}
+.search input::placeholder { color: var(--ink-faint); }
+/* The browser's own clear button, which would otherwise sit on our border. */
+.search input::-webkit-search-cancel-button { margin-right: 4px; }
+
+.search .btn { flex: none; border-radius: 99px; padding: 9px 18px; }
+
+/* Where a result lives. Only search sets it - see templates/dashboard/_node.html. */
+.node-where {
+  display: block;
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--brand);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* --- explorer ------------------------------------------------------------ */
 
 /* Breadcrumb. Wraps rather than scrolls: a deep path on a phone should push
@@ -685,6 +732,12 @@ tbody tr:hover { background: #fafcfe; }
   /* Each tool gets its own full-width row: two half-width buttons on a phone
      leave neither with room for its label. */
   .tool { flex: 1 1 100%; }
+
+  /* Kept visible rather than relying on the keyboard's Go key - the button is
+     the part a non-technical user looks for. Just narrower. */
+  .search { padding-left: 12px; }
+  .search .btn { padding: 9px 15px; }
+  .search input { font-size: 16px; }  /* under 16px, iOS zooms the page in */
 
   .node-main { gap: 11px; padding: 12px 4px 12px 13px; }
   .node-icon { width: 33px; height: 33px; }

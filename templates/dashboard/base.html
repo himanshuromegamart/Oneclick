@@ -80,6 +80,21 @@
     </nav>
 
     <div class="inner">
+      {% comment %}
+        On every page, because the moment you want to search is the moment you
+        have given up navigating - so it must not itself need navigating to.
+      {% endcomment %}
+      <form class="search" method="get" action="{% url 'dashboard:search' %}" role="search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>
+        </svg>
+        <input type="search" name="q" value="{{ term|default:'' }}"
+               placeholder="Search everything — categories and documents"
+               aria-label="Search categories and documents">
+        <button type="submit" class="btn">Search</button>
+      </form>
+
       <header class="page-head">
         <h1>{% block heading %}{% endblock %}</h1>
         <p>{% block subheading %}{% endblock %}</p>

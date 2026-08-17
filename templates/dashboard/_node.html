@@ -29,6 +29,11 @@
     <span class="node-text">
       <span class="node-name">{{ node.name }}</span>
       <span class="node-detail">{{ node.detail }}</span>
+      {% comment %}
+        Only search passes a location. In the explorer you already know where
+        you are, so repeating it on every row would be noise.
+      {% endcomment %}
+      {% if location %}<span class="node-where">in {{ location }}</span>{% endif %}
     </span>
 
     {% if node.is_container %}
@@ -60,6 +65,8 @@
       <input type="hidden" name="action" value="delete">
       <input type="hidden" name="kind" value="{{ node.kind }}">
       <input type="hidden" name="node_id" value="{{ node.id }}">
+      {# Carries the search term back, so deleting from results keeps them. #}
+      <input type="hidden" name="q" value="{{ term|default:'' }}">
       <button type="submit" class="node-act node-act-danger" title="Delete {{ node.name }}">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
              stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">

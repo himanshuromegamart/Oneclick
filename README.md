@@ -142,6 +142,7 @@ Open <http://localhost:8000/api/docs/> for the interactive API documentation.
 
 | Screen | What it is for |
 |---|---|
+| **Search** | Find anything, anywhere — on every page, so it is never a click away |
 | **All categories** | Walk into a category, see what is inside, add and upload there |
 | **Category tree** | The whole tree as one flat list, for adding at any depth |
 | **Users** | Create accounts, set passwords, choose Admin or User |
@@ -158,6 +159,16 @@ first, then documents.
 
 Deleting from here is a recycle-bin delete — nothing is destroyed. Deleting a
 category takes everything inside it, and the confirmation says so.
+
+**Search is global and forgiving.** The box sits on every page, and searches
+categories and documents together across the whole tree — you never have to
+know which category something went into. Spelling does not have to be exact:
+"brochre" finds "Brochure". Every result says **where** it is
+(`in Products › Water Cooler`), which is the part that matters when four
+products each have a "500 LPH".
+
+It is the same Postgres full-text and trigram search the mobile app uses, so a
+term that finds something on a phone finds it here too.
 
 **Documents are served by this app, not linked to Cloudinary directly.** They
 have to be. Cloudinary stores PDF, Word and Excel as *raw* assets and serves
