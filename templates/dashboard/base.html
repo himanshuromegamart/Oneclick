@@ -96,8 +96,13 @@
   </div>
 </div>
 
-{# Upgrades any select[data-searchable] into a search box. Deferred, and the
-   native select works on its own if this never loads. #}
+{% comment %}
+  Upgrades any select[data-searchable] into a search box. Deferred, and the
+  native select still works on its own if this never loads.
+
+  Note the tag: Django's hash comment is single-line only, so a multi-line
+  one is not a comment at all - it renders onto the page as text.
+{% endcomment %}
 <script src="{% static 'dashboard/combobox.js' %}" defer></script>
 </body>
 </html>

@@ -13,8 +13,10 @@
 
 {% block content %}
 
-{# Where you are. Always shows "All categories" as the root, so there is a way
-   back up from any depth without the browser's back button. #}
+{% comment %}
+  Where you are. Always shows "All categories" as the root, so there is a way
+  back up from any depth without the browser's back button.
+{% endcomment %}
 <nav class="crumbs" aria-label="Breadcrumb">
   <a href="{% url 'dashboard:explorer-root' %}" {% if not here %}class="is-here"{% endif %}>
     All categories
@@ -66,8 +68,10 @@
     </div>
   </details>
 
-  {# Documents live inside a category, so there is nothing to upload into at
-     the top level. Offering the form there would only produce an error. #}
+  {% comment %}
+    Documents live inside a category, so there is nothing to upload into at
+    the top level. Offering the form there would only produce an error.
+  {% endcomment %}
   {% if here %}
     <details class="tool" {% if upload_form.errors %}open{% endif %}>
       <summary class="btn btn-quiet">
@@ -103,7 +107,13 @@
 
 <div class="card">
   {% if listing.is_empty %}
-    <div class="empty">
+    <div class="empty empty-lg">
+      <span class="empty-art" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"
+             stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+        </svg>
+      </span>
       {% if here %}
         <strong>{{ here.name }} is empty</strong>
         Add a category inside it, or upload your first document.
@@ -113,6 +123,19 @@
       {% endif %}
     </div>
   {% else %}
+    <div class="listing-head">
+      <span class="listing-count">
+        {% if listing.category_count %}
+          <span class="tally"><b>{{ listing.category_count }}</b>
+            categor{{ listing.category_count|pluralize:"y,ies" }}</span>
+        {% endif %}
+        {% if listing.document_count %}
+          <span class="tally"><b>{{ listing.document_count }}</b>
+            document{{ listing.document_count|pluralize }}</span>
+        {% endif %}
+      </span>
+    </div>
+
     <ul class="nodes">
       {% for node in listing.nodes %}
         {% include "dashboard/_node.html" %}

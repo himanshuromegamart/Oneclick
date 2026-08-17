@@ -64,6 +64,15 @@ class Node(ABC):
         return False
 
     @property
+    def tone(self) -> str:
+        """One word the stylesheet colours the row by.
+
+        Here rather than as a chain of ``{% if %}`` in the template: the node
+        already knows what it is, and the template's whole job is not to.
+        """
+        return "other"
+
+    @property
     def created_by(self) -> Any:
         return None
 
@@ -109,6 +118,10 @@ class Category(Node):
     @property
     def is_container(self) -> bool:
         return True
+
+    @property
+    def tone(self) -> str:
+        return "category"
 
     @property
     def created_by(self) -> Any:
@@ -158,9 +171,13 @@ class Document(Node):
         return self.file.created_at
 
     @property
-    def category(self) -> str:
-        """image / video / document / … - drives the row icon."""
+    def tone(self) -> str:
+        """image / video / spreadsheet / … - drives the row's icon colour."""
         return self.file.category
+
+    @property
+    def extension(self) -> str:
+        return self.file.extension.upper()
 
 
 class Listing:

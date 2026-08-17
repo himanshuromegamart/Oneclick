@@ -112,8 +112,12 @@ a { color: var(--brand); }
 .page-head h1 { margin: 0; font-size: 24px; letter-spacing: -.4px; }
 .page-head p  { margin: 5px 0 0; color: var(--ink-soft); font-size: 14px; }
 
-/* Mobile top bar - hidden on desktop where the sidebar is always visible. */
-.topbar { display: none; }
+/* Mobile chrome - hidden on desktop, where the sidebar is always visible.
+   Both, not just the top bar: the tab strip is only given its layout inside
+   the mobile media query, so without this it lands on the desktop page as a
+   row of bare underlined links. */
+.topbar,
+.tabs { display: none; }
 
 /* --- cards --------------------------------------------------------------- */
 
@@ -309,6 +313,20 @@ tbody tr:hover { background: #fafcfe; }
 .empty { padding: 40px 20px; text-align: center; color: var(--ink-faint); }
 .empty strong { display: block; color: var(--ink-soft); margin-bottom: 3px; }
 
+.empty-lg { padding: 56px 24px; font-size: 14px; }
+.empty-lg strong { font-size: 16px; color: var(--ink); margin-bottom: 6px; }
+.empty-art {
+  display: grid;
+  place-items: center;
+  width: 62px;
+  height: 62px;
+  margin: 0 auto 16px;
+  color: var(--brand);
+  background: var(--brand-tint);
+  border-radius: 50%;
+}
+.empty-art svg { width: 29px; height: 29px; }
+
 /* --- searchable dropdown ------------------------------------------------- */
 
 .combo { position: relative; }
@@ -419,30 +437,43 @@ tbody tr:hover { background: #fafcfe; }
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 3px 6px;
-  margin-bottom: 15px;
+  gap: 3px 7px;
+  margin-bottom: 16px;
+  padding: 9px 14px;
   font-size: 13.5px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 99px;
 }
-.crumbs a { color: var(--brand); text-decoration: none; }
+.crumbs a { color: var(--brand); text-decoration: none; font-weight: 550; }
 .crumbs a:hover { text-decoration: underline; }
-.crumbs .is-here { color: var(--ink); font-weight: 600; }
+.crumbs .is-here { color: var(--ink); font-weight: 650; }
 .crumb-sep { color: var(--ink-faint); }
 
-/* The two add-tools. <details> gives an open/close panel with no JavaScript,
-   so the page still works if the script never loads. */
+/* The add-tools. <details> gives an open/close panel with no JavaScript, so
+   the page still works if the script never loads.
+
+   Closed, they sit side by side as ordinary buttons. Opening one lets it take
+   the whole row, so its panel gets full width instead of being squeezed into
+   half of it. */
 .tools {
   display: flex;
   flex-wrap: wrap;
+  align-items: flex-start;
   gap: 10px;
-  margin-bottom: 16px;
+  margin-bottom: 18px;
 }
-.tool { flex: 1 1 240px; min-width: 0; }
+.tool { flex: 0 0 auto; min-width: 0; }
+.tool[open] { flex: 1 1 100%; }
+
 .tool > summary {
   list-style: none;
-  width: 100%;
   user-select: none;
 }
 .tool > summary::-webkit-details-marker { display: none; }
+/* The trigger is a <summary>, so it needs the button look applied by hand. */
+.tool > summary.btn { display: inline-flex; }
+.tool[open] > summary { margin-bottom: 0; }
 
 .tool-body {
   margin-top: 10px;
@@ -459,6 +490,20 @@ tbody tr:hover { background: #fafcfe; }
 }
 .tool-note strong { color: var(--ink); }
 
+.listing-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+  background: #fbfdff;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+.listing-count { display: flex; flex-wrap: wrap; gap: 6px 14px; }
+.tally { font-size: 12.5px; color: var(--ink-faint); }
+.tally b { color: var(--ink); font-weight: 650; }
+
 /* The listing. One row shape for categories and documents alike - the whole
    point of the composite is that they line up. */
 .nodes { margin: 0; padding: 0; list-style: none; }
@@ -466,12 +511,20 @@ tbody tr:hover { background: #fafcfe; }
 .node {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 0 10px 0 0;
+  gap: 4px;
+  padding-right: 10px;
   border-bottom: 1px solid var(--line);
+  /* A transparent bar that colours on hover, rather than a border that only
+     appears then - otherwise every row shifts 3px sideways as the mouse
+     crosses it. */
+  border-left: 3px solid transparent;
+  transition: background .1s, border-color .1s;
 }
 .node:last-child { border-bottom: 0; }
-.node:hover { background: #f8fafc; }
+.node:hover {
+  background: #f8fafc;
+  border-left-color: var(--brand);
+}
 
 .node-main {
   flex: 1;
@@ -479,7 +532,7 @@ tbody tr:hover { background: #fafcfe; }
   display: flex;
   align-items: center;
   gap: 13px;
-  padding: 13px 6px 13px 16px;
+  padding: 12px 6px 12px 14px;
   text-decoration: none;
   color: inherit;
 }
@@ -488,15 +541,26 @@ tbody tr:hover { background: #fafcfe; }
   flex: none;
   display: grid;
   place-items: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 9px;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: #f1f5f9;
+  color: var(--ink-soft);
 }
 .node-icon svg { width: 19px; height: 19px; }
-.node-category .node-icon { background: var(--brand-tint); color: var(--brand); }
-.node-document .node-icon { background: #f1f5f9;           color: var(--ink-soft); }
 
-.node-text { min-width: 0; }
+/* Coloured by what the row is, so a long list is scannable by shape and
+   colour before you read a single name. The tone comes from the node itself -
+   see apps/dashboard/nodes.py - so this stays a lookup, not a branch. */
+.node[data-tone="category"]     .node-icon { background: var(--brand-tint); color: var(--brand); }
+.node[data-tone="document"]     .node-icon { background: #fef2f2; color: #b91c1c; }
+.node[data-tone="image"]        .node-icon { background: #eef7f2; color: #0f766e; }
+.node[data-tone="video"]        .node-icon { background: #f5f3ff; color: #6d28d9; }
+.node[data-tone="spreadsheet"]  .node-icon { background: #ecfdf5; color: #047857; }
+.node[data-tone="presentation"] .node-icon { background: #fff7ed; color: #c2410c; }
+.node[data-tone="archive"]      .node-icon { background: #fefce8; color: #a16207; }
+
+.node-text { flex: 1; min-width: 0; }
 .node-name {
   display: block;
   font-size: 14.5px;
@@ -507,18 +571,33 @@ tbody tr:hover { background: #fafcfe; }
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.node:hover .node-name { color: var(--brand-dark); }
 .node-detail {
   display: block;
   margin-top: 2px;
   font-size: 12.5px;
   color: var(--ink-faint);
+  /* Same reason as the name: this is a summary, not a paragraph, so it stays
+     on one line rather than wrapping the row to three. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .node-go { flex: none; color: var(--ink-faint); display: grid; place-items: center; }
 .node-go svg { width: 17px; height: 17px; }
+.node:hover .node-go { color: var(--brand); }
 
 .node-actions { flex: none; display: flex; align-items: center; gap: 2px; }
 .node-del { margin: 0; }
+
+/* The row actions stay out of the way until the row is under the cursor.
+   Never hidden on touch, where there is no hover to reveal them. */
+@media (hover: hover) {
+  .node-actions { opacity: 0; transition: opacity .1s; }
+  .node:hover .node-actions,
+  .node:focus-within .node-actions { opacity: 1; }
+}
 
 .node-act {
   display: grid;

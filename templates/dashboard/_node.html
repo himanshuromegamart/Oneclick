@@ -1,11 +1,12 @@
-{# One row of the explorer.
+{% comment %}
+  One row of the explorer.
 
-   Deliberately does not know whether it has a category or a document: it asks
-   the node for a name, a detail line and a URL, and those mean the right thing
-   for either. The only branch is `is_container`, because opening a category
-   navigates in place while a document opens in a new tab. #}
-
-<li class="node {% if node.is_container %}node-category{% else %}node-document{% endif %}">
+  Deliberately does not know whether it has a category or a document: it asks
+  the node for a name, a detail line and a URL, and those mean the right thing
+  for either. The only branch is `is_container`, because opening a category
+  navigates in place while a document opens in a new tab.
+{% endcomment %}
+<li class="node" data-tone="{{ node.tone }}">
 
   <a class="node-main" href="{{ node.url }}"
      {% if not node.is_container %}target="_blank" rel="noopener"{% endif %}>
@@ -49,8 +50,10 @@
       </a>
     {% endif %}
 
-    {# A form, not a link: deleting on GET means a crawler or a prefetch can
-       do it, and this one cascades to everything inside. #}
+    {% comment %}
+      A form, not a link: deleting on GET means a crawler or a prefetch can
+      do it, and this one cascades to everything inside.
+    {% endcomment %}
     <form method="post" class="node-del"
           onsubmit="return confirm('Move “{{ node.name|escapejs }}” to the recycle bin?{% if node.is_container %}\n\nEverything inside it goes too.{% endif %}');">
       {% csrf_token %}

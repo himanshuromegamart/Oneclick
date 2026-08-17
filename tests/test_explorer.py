@@ -400,7 +400,7 @@ class TestTheListingPagesAcrossBothTables:
             repo.create_folder(name=f"Many {index:03d}", parent=child_folder, created_by=admin)
 
         first = browser.get(reverse("dashboard:explorer", args=[child_folder.pk]))
-        assert first.content.count(b'class="node ') == PAGE_SIZE
+        assert first.content.count(b'<li class="node"') == PAGE_SIZE
 
         second = browser.get(reverse("dashboard:explorer", args=[child_folder.pk]), {"page": 2})
         assert b"Many 06" in second.content
@@ -410,6 +410,49 @@ class TestTheListingPagesAcrossBothTables:
             reverse("dashboard:explorer", args=[child_folder.pk]), {"page": "abc"}
         )
         assert response.status_code == 200
+
+
+class TestNothingLeaksOntoThePage:
+    """Django's {# #} comment is single-line only.
+
+    Spread one over two lines and it stops being a comment: the whole thing
+    renders onto the page as text. Nothing else catches it - the view returns
+    200, the assertions about content still pass - so it ships looking fine to
+    every test and broken to every human.
+    """
+
+    @pytest.mark.parametrize("url_name", ["explorer-root", "home", "users", "categories"])
+    def test_no_template_comment_reaches_the_browser(self, browser, url_name):
+        response = browser.get(reverse(f"dashboard:{url_name}"))
+
+        # Guard against the test passing on an empty body: a redirect has no
+        # content, so it would satisfy every assertion below without rendering
+        # anything at all.
+        assert response.status_code == 200
+        assert len(response.content) > 500
+
+        assert b"{#" not in response.content
+        assert b"#}" not in response.content
+
+    def test_the_login_page_is_clean(self):
+        """Checked signed out, because signed in it only redirects."""
+        response = Client().get(reverse("dashboard:login"))
+
+        assert response.status_code == 200
+        assert b"{#" not in response.content
+
+    def test_no_unrendered_tag_reaches_the_browser(self, browser, child_folder, sample_file):
+        """Same class of mistake: a tag that was never a tag."""
+        content = browser.get(reverse("dashboard:explorer", args=[child_folder.pk])).content
+
+        assert b"{%" not in content
+        assert b"{{" not in content
+
+    def test_the_row_partial_is_clean_too(self, browser, child_folder, sample_file):
+        content = browser.get(reverse("dashboard:explorer", args=[child_folder.pk])).content
+
+        assert b"{#" not in content
+        assert b"endcomment" not in content
 
 
 class TestTheCompositeItself:
