@@ -30,6 +30,7 @@ import logging
 import re
 import time
 import uuid
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from typing import Any, BinaryIO
 
@@ -144,6 +145,22 @@ class StorageBackend(abc.ABC):
     def build_upload_signature(
         self, *, folder_path: str, resource_type: str = "auto", public_id: str = ""
     ) -> UploadSignature: ...
+
+    @abc.abstractmethod
+    def open_stream(
+        self, public_id: str, resource_type: str = "raw", *, chunk_size: int = 64 * 1024
+    ) -> Iterator[bytes]:
+        """Read the stored bytes back, in chunks.
+
+        Needed because a signed URL is not always something a browser can be
+        sent to directly: Cloudinary serves raw assets from its download API,
+        which answers ``application/octet-stream`` with the opaque public_id as
+        the filename whatever the file really is. Anything that has to present
+        a document *as* a document has to fetch it and say so itself.
+
+        Chunked rather than returning bytes: a 200 MB video must not become 200
+        MB of process memory.
+        """
 
     def thumbnail_url(self, public_id: str, resource_type: str, width: int = 400) -> str:
         return ""
@@ -309,6 +326,54 @@ class CloudinaryStorageBackend(StorageBackend):
         url, _ = cloudinary.utils.cloudinary_url(public_id, **options)
         return url
 
+    def open_stream(
+        self, public_id: str, resource_type: str = "raw", *, chunk_size: int = 64 * 1024
+    ) -> Iterator[bytes]:
+        """Fetch the stored bytes back through a freshly signed URL.
+
+        Server-to-server, so the short TTL on the URL does not matter - it is
+        used within milliseconds of being minted.
+        """
+        import requests
+
+        url = self.signed_url(public_id, resource_type)
+
+        try:
+            response = requests.get(url, stream=True, timeout=(10, 60))
+        except Exception as exc:
+            logger.error("storage_fetch_failed", exc_info=exc, extra={"public_id": public_id})
+            raise ExternalServiceError(
+                detail="The document could not be retrieved. Please try again.",
+                code=ErrorCode.STORAGE_ERROR,
+            ) from exc
+
+        if response.status_code != 200:
+            # Logged with the provider's own error header, which names the real
+            # cause far better than the status does.
+            logger.error(
+                "storage_fetch_rejected",
+                extra={
+                    "public_id": public_id,
+                    "status": response.status_code,
+                    "cld_error": response.headers.get("x-cld-error", ""),
+                },
+            )
+            response.close()
+            raise ExternalServiceError(
+                detail="The document could not be retrieved. Please try again.",
+                code=ErrorCode.STORAGE_ERROR,
+            )
+
+        def chunks() -> Iterator[bytes]:
+            # closing() semantics by hand: the connection must go back to the
+            # pool even if the client disconnects halfway through a download.
+            try:
+                yield from response.iter_content(chunk_size=chunk_size)
+            finally:
+                response.close()
+
+        return chunks()
+
     def build_upload_signature(
         self, *, folder_path: str, resource_type: str = "auto", public_id: str = ""
     ) -> UploadSignature:
@@ -411,6 +476,19 @@ class InMemoryStorageBackend(StorageBackend):
         ttl_seconds: int | None = None,
     ) -> str:
         return f"https://test.local/{public_id}?signed=1"
+
+    def open_stream(
+        self, public_id: str, resource_type: str = "raw", *, chunk_size: int = 64 * 1024
+    ) -> Iterator[bytes]:
+        data = type(self).store.get(public_id)
+        if data is None:
+            raise ExternalServiceError(
+                detail="The document could not be retrieved. Please try again.",
+                code=ErrorCode.STORAGE_ERROR,
+            )
+        # Chunked like the real one, so a test can tell a streaming response
+        # from one that quietly buffered the lot.
+        return (data[at : at + chunk_size] for at in range(0, len(data), chunk_size))
 
     def build_upload_signature(
         self, *, folder_path: str, resource_type: str = "auto", public_id: str = ""

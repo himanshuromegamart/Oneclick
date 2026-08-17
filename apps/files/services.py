@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterator
 from dataclasses import asdict
 from datetime import timedelta
 from typing import Any, BinaryIO
@@ -463,6 +464,27 @@ class FileService:
         self.repo.touch_recent(actor, file)
         url = self.storage.signed_url(file.public_id, file.resource_type)
         return self._delivery_payload(file, url)
+
+    def open_stream(
+        self, actor: User, file: FileAsset, *, as_attachment: bool = False
+    ) -> Iterator[bytes]:
+        """The bytes themselves, for serving the document from our own domain.
+
+        Needed because a signed Cloudinary URL is not always something a
+        browser can simply be pointed at. Raw assets - PDF, Word, Excel - come
+        back from Cloudinary's download API as
+        ``Content-Type: application/octet-stream`` with the opaque public_id as
+        the filename, so the browser saves an extensionless blob instead of
+        opening a PDF. Serving the bytes ourselves is what lets us state the
+        real type and the real name.
+
+        Accounting matches the URL methods, so a download counts the same
+        whichever route the client took.
+        """
+        if as_attachment:
+            self.repo.register_download(file)
+        self.repo.touch_recent(actor, file)
+        return self.storage.open_stream(file.public_id, file.resource_type)
 
     # -- search index -----------------------------------------------------
     @staticmethod

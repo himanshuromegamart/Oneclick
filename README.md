@@ -159,6 +159,16 @@ first, then documents.
 Deleting from here is a recycle-bin delete — nothing is destroyed. Deleting a
 category takes everything inside it, and the confirmation says so.
 
+**Documents are served by this app, not linked to Cloudinary directly.** They
+have to be. Cloudinary stores PDF, Word and Excel as *raw* assets and serves
+them from its download API, which answers `Content-Type:
+application/octet-stream` with the storage id as the filename — whatever the
+file actually is. A browser sent there cannot open a PDF, because it has never
+been told it is one; it saves an extensionless blob instead. Streaming the
+bytes through `/dashboard/documents/<id>/open/` is what lets the response say
+`application/pdf` and `price-list.pdf`. The trade is that the bytes pass
+through the server rather than straight from the CDN.
+
 ---
 
 ## The Django admin

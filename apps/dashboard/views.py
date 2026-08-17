@@ -18,9 +18,10 @@ import logging
 from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout
 from django.db.models import Count, Q
-from django.http import Http404, HttpRequest, HttpResponse
+from django.http import Http404, HttpRequest, HttpResponse, StreamingHttpResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse
+from django.utils.http import content_disposition_header
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_http_methods
 
@@ -34,7 +35,7 @@ from apps.dashboard.forms import (
     UploadForm,
     UserForm,
 )
-from apps.files.models import FileAsset
+from apps.files.models import FileAsset, guess_mime_type
 from apps.files.services import FileService
 from apps.folders.models import Folder
 from apps.folders.services import FolderService
@@ -381,24 +382,45 @@ def explorer(request: HttpRequest, folder_id=None) -> HttpResponse:
 @never_cache
 @admin_required
 def document_open(request: HttpRequest, file_id) -> HttpResponse:
-    """Hand the browser a signed URL for the stored file.
+    """Serve the document from our own domain, with its real type and name.
 
-    Redirecting rather than embedding the URL in the listing: signed links are
-    short-lived, so one minted per click always works, while one minted when
-    the page was drawn would expire while somebody read the list.
+    The obvious implementation redirects to the signed Cloudinary URL, and it
+    does not work for the documents this product is mostly made of. Cloudinary
+    keeps PDF, Word and Excel as *raw* assets and serves them from its download
+    API, which answers:
 
-    ``?download=1`` asks for it as an attachment; without it the browser shows
-    a PDF or an image inline, which is what you want when checking a document
-    is the right one.
+        Content-Type: application/octet-stream
+        Content-Disposition: attachment; filename="764c3f7f6eb14a38…"
+
+    - whatever the file actually is. So the browser cannot open a PDF (it has
+    not been told it is one) and saves an extensionless blob named after the
+    opaque public_id instead. The bytes were always correct; only the headers
+    were wrong.
+
+    Streaming it ourselves is what lets us state ``application/pdf`` and
+    ``price-list.pdf``. The cost is that the bytes pass through this server
+    rather than going straight from the CDN, which for internal documents of a
+    few megabytes is a fair trade for links that work.
+
+    ``?download=1`` saves instead of showing.
     """
     file = FileAsset.objects.filter(pk=file_id).first()
     if file is None:
         raise Http404("Document not found.")
 
-    service = FileService()
-    if request.GET.get("download"):
-        payload = service.download_url(request.user, file)
-    else:
-        payload = service.preview_url(request.user, file)
+    as_attachment = bool(request.GET.get("download"))
 
-    return redirect(payload["url"])
+    try:
+        chunks = FileService().open_stream(request.user, file, as_attachment=as_attachment)
+    except DomainError as exc:
+        messages.error(request, str(exc.detail))
+        return _redirect_here(file.folder)
+
+    response = StreamingHttpResponse(
+        chunks,
+        content_type=file.mime_type or guess_mime_type(file.name),
+    )
+    response["Content-Disposition"] = content_disposition_header(as_attachment, file.name)
+    # Nothing here is a shared asset, and the URL is behind a session.
+    response["X-Content-Type-Options"] = "nosniff"
+    return response

@@ -296,11 +296,86 @@ class TestDeleting:
 
 
 class TestOpeningADocument:
-    def test_it_redirects_to_the_stored_file(self, browser, sample_file):
+    """The headers are the whole feature here.
+
+    Redirecting to the signed Cloudinary URL - the obvious implementation -
+    hands the browser `application/octet-stream` named after the opaque
+    public_id, so a PDF arrives as an extensionless blob the browser cannot
+    open. These tests pin the two headers that fix that, because the bytes
+    were never the problem and a test that only checks the bytes would have
+    passed throughout.
+    """
+
+    def test_it_serves_the_real_bytes(self, browser, sample_file):
         response = browser.get(reverse("dashboard:document-open", args=[sample_file.pk]))
 
-        assert response.status_code == 302
-        assert response.url
+        assert response.status_code == 200
+        assert b"".join(response.streaming_content).startswith(b"%PDF")
+
+    def test_it_declares_the_real_content_type(self, browser, sample_file):
+        """Not octet-stream: the browser decides whether it can render a
+        document from this header alone."""
+        response = browser.get(reverse("dashboard:document-open", args=[sample_file.pk]))
+
+        assert response["Content-Type"] == "application/pdf"
+
+    def test_it_declares_the_real_filename(self, browser, sample_file):
+        """Not the storage public_id, which has no extension on it."""
+        response = browser.get(reverse("dashboard:document-open", args=[sample_file.pk]))
+
+        assert sample_file.name in response["Content-Disposition"]
+        assert sample_file.public_id not in response["Content-Disposition"]
+
+    def test_opening_shows_it_rather_than_saving_it(self, browser, sample_file):
+        response = browser.get(reverse("dashboard:document-open", args=[sample_file.pk]))
+
+        assert response["Content-Disposition"].startswith("inline")
+
+    def test_downloading_saves_it(self, browser, sample_file):
+        response = browser.get(
+            reverse("dashboard:document-open", args=[sample_file.pk]) + "?download=1"
+        )
+
+        assert response["Content-Disposition"].startswith("attachment")
+
+    def test_it_streams_rather_than_buffering(self, browser, sample_file):
+        """A large document must not become an equally large lump of memory."""
+        response = browser.get(reverse("dashboard:document-open", args=[sample_file.pk]))
+
+        assert response.streaming
+
+    def test_a_name_with_non_ascii_still_works(self, browser, child_folder, file_service):
+        """A quoted filename header cannot carry these, so Django emits the
+        RFC 5987 form. Worth pinning: the failure is a 500 on send."""
+        import io
+
+        file = file_service.upload(
+            child_folder.created_by,
+            folder_id=child_folder.pk,
+            file_obj=io.BytesIO(b"%PDF-1.4 x"),
+            filename="मूल्य सूची.pdf",
+            size_bytes=10,
+            content_type="application/pdf",
+        )
+
+        response = browser.get(reverse("dashboard:document-open", args=[file.pk]))
+
+        assert response.status_code == 200
+        assert "filename*=utf-8''" in response["Content-Disposition"].lower()
+
+    def test_a_storage_failure_does_not_show_a_broken_page(self, browser, sample_file, monkeypatch):
+        """The bytes can be missing - a purge, a provider outage. The person
+        should get told, not handed a zero-byte PDF."""
+        from apps.files.storage import InMemoryStorageBackend
+
+        InMemoryStorageBackend.store.pop(sample_file.public_id, None)
+
+        response = browser.get(
+            reverse("dashboard:document-open", args=[sample_file.pk]), follow=True
+        )
+
+        assert response.status_code == 200
+        assert b"could not be retrieved" in response.content
 
     def test_download_takes_the_download_path(self, browser, sample_file):
         """Asserted through the counter rather than the URL: the test storage
