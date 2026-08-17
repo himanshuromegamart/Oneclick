@@ -106,7 +106,9 @@ class Category(Node):
 
         parts = []
         if subfolders:
-            parts.append(f"{subfolders} categor{'y' if subfolders == 1 else 'ies'}")
+            # "subcategory", not "category": whatever sits inside a category is
+            # a subcategory of it, wherever that category itself happens to be.
+            parts.append(f"{subfolders} subcategor{'y' if subfolders == 1 else 'ies'}")
         if files:
             parts.append(f"{files} document{'' if files == 1 else 's'}")
         return " · ".join(parts)

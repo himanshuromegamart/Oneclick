@@ -4,7 +4,7 @@
 {% block heading %}{% if here %}{{ here.name }}{% else %}All categories{% endif %}{% endblock %}
 {% block subheading %}
   {% if here %}
-    {{ listing.category_count }} categor{{ listing.category_count|pluralize:"y,ies" }},
+    {{ listing.category_count }} {{ child_stem }}{{ listing.category_count|pluralize:"y,ies" }},
     {{ listing.document_count }} document{{ listing.document_count|pluralize }} in here.
   {% else %}
     Your main categories. Open one to see what is inside and add to it.
@@ -38,7 +38,7 @@
            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="M12 5v14"/><path d="M5 12h14"/>
       </svg>
-      New category
+      New {{ child_noun }}
     </summary>
     <div class="tool-body">
       <form method="post" novalidate>
@@ -63,7 +63,7 @@
           It will be added inside
           <strong>{% if here %}{{ here.name }}{% else %}the top level{% endif %}</strong>.
         </p>
-        <button type="submit" class="btn">Add category</button>
+        <button type="submit" class="btn">Add {{ child_noun }}</button>
       </form>
     </div>
   </details>
@@ -116,7 +116,7 @@
       </span>
       {% if here %}
         <strong>{{ here.name }} is empty</strong>
-        Add a category inside it, or upload your first document.
+        Add a {{ child_noun }} inside it, or upload your first document.
       {% else %}
         <strong>No categories yet</strong>
         Add your first one — something like “Products” or “Certificates”.
@@ -127,7 +127,7 @@
       <span class="listing-count">
         {% if listing.category_count %}
           <span class="tally"><b>{{ listing.category_count }}</b>
-            categor{{ listing.category_count|pluralize:"y,ies" }}</span>
+            {{ child_stem }}{{ listing.category_count|pluralize:"y,ies" }}</span>
         {% endif %}
         {% if listing.document_count %}
           <span class="tally"><b>{{ listing.document_count }}</b>

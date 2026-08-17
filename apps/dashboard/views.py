@@ -247,7 +247,8 @@ def _add_category(request: HttpRequest, here: Folder | None) -> HttpResponse | N
         form.add_error(None, str(exc.detail))
         return None
 
-    messages.success(request, f"“{folder.name}” added.")
+    noun = "Subcategory" if here else "Category"
+    messages.success(request, f"{noun} “{folder.name}” added.")
     return _redirect_here(here)
 
 
@@ -371,6 +372,16 @@ def explorer(request: HttpRequest, folder_id=None) -> HttpResponse:
             "listing": listing,
             "category_form": category_form,
             "upload_form": upload_form,
+            # What to call the things being listed and added. Inside a category
+            # they are subcategories; at the top level they are categories. The
+            # model does not distinguish them - depth is the only difference -
+            # but the screen should, because that is the word the person using
+            # it would use. Decided here so the template does not repeat the
+            # same {% if %} five times.
+            "child_noun": "subcategory" if here else "category",
+            # Stem for the {{ n|pluralize:"y,ies" }} filter, which needs the
+            # word without its final "y".
+            "child_stem": "subcategor" if here else "categor",
             "page": page,
             "page_size": PAGE_SIZE,
             "next_page": page + 1,

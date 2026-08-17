@@ -530,6 +530,52 @@ class TestNothingLeaksOntoThePage:
         assert b"endcomment" not in content
 
 
+class TestItCallsThingsWhatTheyAre:
+    """Inside a category you are adding a subcategory, and the screen says so.
+
+    The model does not distinguish the two - depth is the only difference -
+    but the person using it does, so the wording follows where they are
+    standing rather than the shape of the table.
+    """
+
+    def test_the_top_level_offers_a_category(self, browser):
+        content = browser.get(reverse("dashboard:explorer-root")).content
+
+        assert b"New category" in content
+        assert b"Add category" in content
+        assert b"subcategory" not in content
+
+    def test_inside_a_category_it_offers_a_subcategory(self, browser, root_folder):
+        content = browser.get(reverse("dashboard:explorer", args=[root_folder.pk])).content
+
+        assert b"New subcategory" in content
+        assert b"Add subcategory" in content
+
+    def test_the_counts_are_worded_to_match(self, browser, admin, root_folder):
+        FolderRepository().create_folder(name="Inner", parent=root_folder, created_by=admin)
+
+        content = browser.get(reverse("dashboard:explorer", args=[root_folder.pk])).content
+
+        assert b"subcategory" in content
+
+    def test_the_empty_state_matches_too(self, browser, child_folder):
+        content = browser.get(reverse("dashboard:explorer", args=[child_folder.pk])).content
+
+        assert b"Add a subcategory inside it" in content
+
+    def test_the_confirmation_says_subcategory(self, browser, root_folder):
+        response = add_category(browser, root_folder, "Inner", "")
+        followed = browser.get(response.url)
+
+        assert b"Subcategory \xe2\x80\x9cInner\xe2\x80\x9d added" in followed.content
+
+    def test_the_confirmation_says_category_at_the_top(self, browser):
+        response = add_category(browser, None, "Outer", "")
+        followed = browser.get(response.url)
+
+        assert b"Category \xe2\x80\x9cOuter\xe2\x80\x9d added" in followed.content
+
+
 class TestTheCompositeItself:
     """The two node types answer the same questions, which is the point."""
 
@@ -551,7 +597,9 @@ class TestTheCompositeItself:
         FolderRepository().create_folder(name="One", parent=root_folder, created_by=admin)
         root_folder.refresh_from_db()
 
-        assert "1 category" in nodes.Category(root_folder).detail
+        # "subcategory", because whatever is inside a category is a
+        # subcategory of it - including at the top level.
+        assert "1 subcategory" in nodes.Category(root_folder).detail
 
     def test_an_empty_category_says_so(self, child_folder):
         assert nodes.Category(child_folder).detail == "Empty"
