@@ -22,6 +22,7 @@ __all__ = [
     "CategoryForm",
     "InlineCategoryForm",
     "LoginForm",
+    "SetPasswordForm",
     "UploadForm",
     "UserForm",
 ]
@@ -271,3 +272,33 @@ class UploadForm(forms.Form):
         label="Documents",
         help_text="PDF, image, Word, Excel. You can select more than one.",
     )
+
+
+class SetPasswordForm(forms.Form):
+    """Reset somebody's password from the user list.
+
+    No current password: this is an admin resetting an account, and the whole
+    reason it exists is that the person has lost or never had theirs. That
+    makes it a privileged action, which is why it lives behind the dashboard
+    and nowhere else.
+
+    Nothing here chooses a hashing algorithm. ``set_password`` uses whatever
+    ``PASSWORD_HASHERS`` says, so a reset password is stored exactly like every
+    other one and cannot drift from them.
+    """
+
+    password = forms.CharField(
+        label="New password",
+        help_text="At least 8 characters, not all numbers, not a common word.",
+        widget=forms.PasswordInput(
+            attrs={"placeholder": "New password", "autocomplete": "new-password"}
+        ),
+    )
+
+    def clean_password(self) -> str:
+        password = self.cleaned_data["password"]
+        try:
+            validate_password(password)
+        except DjangoValidationError as exc:
+            raise forms.ValidationError(list(exc.messages)) from exc
+        return password

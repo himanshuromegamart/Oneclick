@@ -52,6 +52,7 @@
             <th class="hide-xs">Dashboard</th>
             <th class="hide-xs">Status</th>
             <th class="nowrap hide-xs">Last signed in</th>
+            <th><span class="sr-only">Actions</span></th>
           </tr>
         </thead>
         <tbody>
@@ -77,6 +78,20 @@
               <td class="muted tiny nowrap hide-xs">
                 {{ person.last_login_at|date:"j M Y, g:i a"|default:"Never" }}
               </td>
+              <td class="nowrap">
+                {% comment %}
+                  A link, not a button, so this still works with no JavaScript:
+                  the server renders the dialog already open when the parameter
+                  is present. The script upgrades it to open on the spot,
+                  without the round trip.
+                {% endcomment %}
+                <a class="btn btn-quiet btn-sm"
+                   href="?set_password={{ person.pk }}#set-password"
+                   data-password-for="{{ person.pk }}"
+                   data-password-name="{{ person.full_name }}">
+                  Change password
+                </a>
+              </td>
             </tr>
           {% endfor %}
         </tbody>
@@ -89,5 +104,40 @@
     </div>
   {% endif %}
 </div>
+
+{% comment %}
+  One dialog for the whole table, not one per row: the form is identical for
+  everybody, so the only thing that changes is which id it carries.
+{% endcomment %}
+<dialog class="modal" id="set-password" {% if opened_for %}open{% endif %}>
+  <form method="post" class="modal-card" novalidate>
+    {% csrf_token %}
+    <input type="hidden" name="action" value="set_password">
+    <input type="hidden" name="user_id" value="{{ opened_for.pk|default:'' }}" data-password-target>
+
+    <h2 class="modal-title">Change password</h2>
+    <p class="modal-note">
+      For <strong data-password-label>{{ opened_for.full_name|default:"this account" }}</strong>.
+      You do not need their current one.
+    </p>
+
+    {% for field in password_form %}
+      <div class="field">
+        <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+        {{ field }}
+        {% if field.help_text %}<div class="help">{{ field.help_text }}</div>{% endif %}
+      </div>
+    {% endfor %}
+
+    <p class="modal-note modal-note-quiet">
+      They stay signed in on their phone — only the password changes.
+    </p>
+
+    <div class="modal-actions">
+      <a class="btn btn-quiet" href="{% url 'dashboard:users' %}" data-modal-close>Cancel</a>
+      <button type="submit" class="btn">Change password</button>
+    </div>
+  </form>
+</dialog>
 
 {% endblock %}

@@ -18,7 +18,8 @@ from urllib.parse import quote
 
 from django.conf import settings
 from django.contrib import messages
-from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth import authenticate, login, logout, update_session_auth_hash
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db.models import Count, Q
 from django.http import (
     Http404,
@@ -33,13 +34,16 @@ from django.utils.http import content_disposition_header
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_http_methods
 
+from apps.accounts.authentication import invalidate_auth_cache
 from apps.accounts.models import User
+from apps.accounts.services import AuthService
 from apps.core.exceptions import DomainError
 from apps.dashboard import nodes
 from apps.dashboard.forms import (
     CategoryForm,
     InlineCategoryForm,
     LoginForm,
+    SetPasswordForm,
     UploadForm,
     UserForm,
 )
@@ -148,11 +152,85 @@ def home(request: HttpRequest) -> HttpResponse:
     return render(request, "dashboard/home.html", context)
 
 
+def _user_or_none(raw_id) -> User | None:
+    """Look a user up by id, tolerating rubbish.
+
+    The id arrives from a query string or a form field, so it can be anything.
+    A malformed UUID makes the ORM raise rather than return nothing, which
+    would turn a mistyped URL into a 500.
+    """
+    if not raw_id:
+        return None
+    try:
+        return User.objects.filter(pk=raw_id).first()
+    except (ValueError, DjangoValidationError):
+        return None
+
+
+def _set_password(request: HttpRequest) -> HttpResponse | None:
+    """Reset one person's password. Returns a redirect, or None to re-render.
+
+    Deliberately does not sign anybody out. The mobile app authenticates with
+    a JWT, and a token carries no password material - nothing about it stops
+    working because the password behind it changed. That is the behaviour we
+    want: an owner resetting a forgotten password should not knock the person
+    off their phone mid-job. `/auth/logout/` exists for when signing out *is*
+    the intention.
+
+    The one session that would break without help is the admin's own, so that
+    case is handled below.
+    """
+    target = _user_or_none(request.POST.get("user_id"))
+    if target is None:
+        messages.error(request, "That account no longer exists.")
+        return redirect("dashboard:users")
+
+    form = SetPasswordForm(request.POST)
+    if not form.is_valid():
+        # Reported as a message rather than beside the field: the field lives
+        # in a dialog that has closed by now, so an error attached to it would
+        # never be seen.
+        for error in form.errors.get("password", []):
+            messages.error(request, error)
+        return redirect("dashboard:users")
+
+    # Through the same service the API uses, so a password set here is hashed
+    # exactly like one set from the app - PBKDF2, per PASSWORD_HASHERS - and
+    # the login lockout counter is cleared the same way too.
+    AuthService().set_password(target, form.cleaned_data["password"])
+    invalidate_auth_cache(target.pk)
+
+    if target.pk == request.user.pk:
+        # Django ties a session to a hash of the password, so changing your own
+        # would log you out of this dashboard on the very next click. Re-stamp
+        # the session instead.
+        update_session_auth_hash(request, target)
+
+    logger.info(
+        "dashboard_password_reset",
+        extra={"actor_id": str(request.user.pk), "user_id": str(target.pk)},
+    )
+    messages.success(
+        request,
+        f"Password updated for {target.full_name}. "
+        "They stay signed in on their phone - only the password changed.",
+    )
+    return redirect("dashboard:users")
+
+
 @never_cache
 @admin_required
 @require_http_methods(["GET", "POST"])
 def users(request: HttpRequest) -> HttpResponse:
-    form = UserForm(request.POST or None)
+    # Two forms post to this page, so the action decides which one is being
+    # submitted. Without it the password post would bind to the create form and
+    # come back covered in "this field is required".
+    if request.method == "POST" and request.POST.get("action") == "set_password":
+        redirect_to = _set_password(request)
+        if redirect_to is not None:
+            return redirect_to
+
+    form = UserForm(request.POST or None) if request.method == "POST" else UserForm()
 
     if request.method == "POST" and form.is_valid():
         user = form.save()
@@ -168,11 +246,18 @@ def users(request: HttpRequest) -> HttpResponse:
         )
         return redirect("dashboard:users")
 
+    # Which account the password dialog is for, when it was opened by a plain
+    # link rather than by the script. Resolved to the object so the dialog can
+    # name the person rather than echo a raw id back at them.
+    opened_for = _user_or_none(request.GET.get("set_password"))
+
     return render(
         request,
         "dashboard/users.html",
         {
             "form": form,
+            "password_form": SetPasswordForm(),
+            "opened_for": opened_for,
             "users": User.objects.order_by("-created_at"),
             "active": "users",
         },
