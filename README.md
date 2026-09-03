@@ -48,6 +48,17 @@ Deleted items go to a recycle bin and can be restored.
 > Cloudinary plan does not store bigger files; it only moves the failure later.
 > When the plan is upgraded, raise `MAX_UPLOAD_BYTES` to match the new ceiling.
 
+**How long a login lasts.** The app's access token is good for **24 hours**
+(`JWT_ACCESS_MINUTES=1440`) and its refresh token for 30 days. The dashboard
+keeps a browser signed in for 12 hours of inactivity.
+
+> Set `JWT_ACCESS_MINUTES` on the server to match. A stale value there
+> overrides the code silently, and a short one is what people experience as
+> "it keeps logging me out" - the app has to refresh mid-session for anything
+> shorter to be invisible. Refresh tokens rotate and the old one is
+> blacklisted, so the app must not fire two refreshes at once: the second gets
+> `401 TOKEN_INVALID` and looks like a logout.
+
 **Login.** Two ways, both giving the same access:
 
 - **Password** — mobile number + password
